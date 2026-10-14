@@ -39,6 +39,7 @@ const ORDER = [
     "memory.ts",
     "pip.ts",
     "triggers.ts",
+    "usage.ts",
 ];
 /** Modules the app cannot work without: always on. */
 const REQUIRED = new Set(["prompt.ts"]);
@@ -57,6 +58,7 @@ const TITLES: Record<string, string> = {
     "memory.ts": "Memory",
     "pip.ts": "PiP",
     "triggers.ts": "Triggers",
+    "usage.ts": "Usage and quota",
 };
 
 /**
@@ -90,6 +92,7 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "watch_pr",
     "repo_watch",
     "session_watch_pr",
+    "usage_quota",
 ]);
 
 /** Pi Pocket's own modules, or the owner's from the drop-in folder. */

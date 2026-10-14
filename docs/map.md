@@ -35,13 +35,15 @@ A module split into parts keeps its name for the part others import, with the re
 
 ### People
 
-| File                   | Owns                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `config.ts`, `auth.ts` | People and settings; cookies, tokens, invites                                                    |
-| `requests.ts`          | Request ids, which say whose each message to Pi is (`u:` a person's own, `p:` sent for a person) |
-| `collab.ts`            | Chat, activity lines (`addActivity`), reactions, pins, notes, typing, take turns                 |
-| `alerts.ts`, `push.ts` | Push notifications: who hears about what; Web Push without dependencies (RFC 8291, 8292)         |
-| `spend.ts`             | Cost per conversation and person; limits                                                         |
+| File                             | Owns                                                                                                                                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.ts`, `auth.ts`           | People and settings; cookies, tokens, invites                                                                                                                    |
+| `requests.ts`                    | Request ids, which say whose each message to Pi is (`u:` a person's own, `p:` sent for a person)                                                                 |
+| `collab.ts`                      | Chat, activity lines (`addActivity`), reactions, pins, notes, typing, take turns                                                                                 |
+| `alerts.ts`, `push.ts`           | Push notifications: who hears about what; Web Push without dependencies (RFC 8291, 8292)                                                                         |
+| `spend.ts`                       | Cost per conversation and person; limits                                                                                                                         |
+| `usage.ts`, `usage-providers.ts` | What the sessions spent, per hour, person, and model; each provider's own quota (`usage-providers.ts`), its background refresh, and the warning past a threshold |
+| `timing.ts`                      | Every model stream timed: when it started, its first token, and its end, stamped on the response for the status line's speed                                     |
 
 ### What people ask of Pi
 
@@ -118,7 +120,7 @@ A module split into parts keeps its name for the part others import, with the re
 
 ## Extensions: `src/server/extensions/`
 
-Each default-exports `(host: PocketHost) => Extension | Extension[]` and is installed in this order: `prompt` (system prompt, with where Pi Pocket's docs are), `artifacts` (artifact tool), `browser` (browser tool and its prompt section; through `host.browsers`), `subagents` (subagent tool and its tasks: anchors, reporters, and the courier that sends waiting reports to the parent together; a subagent runs on its session's model, or one the owner allowed, and the app rebuilds the module when that list changes), `schedules` (schedule tool; installs the schedule task), `goals` (hook after each answer), `plan` (tool hook and prompt section), `guard` (tool hook that asks for approval), `codemode` (codemode tool; a script's calls go through the same hooks), `memory` (memory tool and the prompt section of lessons in force; through `host.memory`), `pip` (PiP's tools, prompt, and follow task, through `host.pip`; only PiP's conversation selects it, as `PocketApp`'s settings leave it out of every other conversation's), `triggers` (the PR and repository watch tasks and the `watch_pr` tool, through `host.watches` and `host.repoWatches`; webhooks need it on).
+Each default-exports `(host: PocketHost) => Extension | Extension[]` and is installed in this order: `prompt` (system prompt, with where Pi Pocket's docs are), `artifacts` (artifact tool), `browser` (browser tool and its prompt section; through `host.browsers`), `subagents` (subagent tool and its tasks: anchors, reporters, and the courier that sends waiting reports to the parent together; a subagent runs on its session's model, or one the owner allowed, and the app rebuilds the module when that list changes), `schedules` (schedule tool; installs the schedule task), `goals` (hook after each answer), `plan` (tool hook and prompt section), `guard` (tool hook that asks for approval), `codemode` (codemode tool; a script's calls go through the same hooks), `memory` (memory tool and the prompt section of lessons in force; through `host.memory`), `pip` (PiP's tools, prompt, and follow task, through `host.pip`; only PiP's conversation selects it, as `PocketApp`'s settings leave it out of every other conversation's), `triggers` (the PR and repository watch tasks and the `watch_pr` tool, through `host.watches` and `host.repoWatches`; webhooks need it on), and `usage` (the `usage_quota` tool, through `host.usage`).
 
 ## Web: `web/` (Preact and htm, no build)
 

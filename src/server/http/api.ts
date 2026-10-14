@@ -362,6 +362,20 @@ export function createApi(options: HttpOptions, auth: Auth) {
             return json(response, 200, app.spend.summary(user));
         }
 
+        // Local usage per window, and each provider's quota; everyone sees it, as the owner chose.
+        if (first === "usage" && method === "GET") {
+            return json(response, 200, app.usage.summary(user));
+        }
+
+        if (first === "usage" && method === "POST") {
+            // The sheet's refresh: the providers are asked again unless one just answered, then the summary goes.
+            const body = await readJson<{ force?: unknown }>(request);
+
+            await app.usage.refreshQuota(body.force === true);
+
+            return json(response, 200, app.usage.summary(user));
+        }
+
         if (first === "spend" && method === "POST") {
             const body = await readJson<{ session?: unknown; person?: unknown; budget?: unknown }>(
                 request,

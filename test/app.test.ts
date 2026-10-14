@@ -523,6 +523,7 @@ test("the owner turns extensions off and on, the guard follows its switch, and t
             "memory.ts",
             "pip.ts",
             "triggers.ts",
+            "usage.ts",
         ],
     );
     assert.equal(module("browser.ts").title, "Browser");

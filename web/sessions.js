@@ -1222,6 +1222,14 @@ export function RailNav({ foldable = false, folded = false }) {
         </button>
         <button
             class="rail-button"
+            title="Usage and provider quota"
+            aria-label="Usage"
+            onClick=${() => openSheet({ type: "usage" })}
+        >
+            <${Icon} name="gauge" size=${18} />
+        </button>
+        <button
+            class="rail-button"
             title="Theme, tiling, motion"
             aria-label="Theme"
             onClick=${() => openSheet({ type: "appearance" })}

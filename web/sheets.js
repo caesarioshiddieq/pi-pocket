@@ -21,6 +21,7 @@ import { SchedulesSheet } from "./sheets/schedules.js";
 import { SessionSheet } from "./sheets/session.js";
 import { ShortcutsSheet } from "./sheets/shortcuts.js";
 import { SpendSheet } from "./sheets/spend.js";
+import { UsageSheet } from "./sheets/usage.js";
 import { TextSheet } from "./sheets/text.js";
 import { ArtifactsSheet, ArtifactViewer, ImageViewer } from "./sheets/viewers.js";
 import { PiSessionSheet, PiSessionsSheet, piSessionsAvailable } from "./sheets/pi-sessions.js";
@@ -198,6 +199,9 @@ function sheetBody(sheet) {
             break;
         case "spend":
             body = html`<${SpendSheet} />`;
+            break;
+        case "usage":
+            body = html`<${UsageSheet} />`;
             break;
         case "running":
             body = html`<${RunningSheet} />`;

@@ -96,6 +96,7 @@ import {
 } from "./skills.ts";
 import { Spend } from "./spend.ts";
 import { Transcripts } from "./transcripts.ts";
+import { Usage } from "./usage.ts";
 import { Watches } from "./watches.ts";
 import { Workspace } from "./workspace.ts";
 
@@ -250,6 +251,7 @@ export class PocketApp {
     readonly goals = new Goals(this);
     readonly shell = new Shell(this);
     readonly spend = new Spend(this);
+    readonly usage = new Usage(this);
     /** Who Pi works for in each conversation, and who wrote and queued each message. */
     readonly attribution = new Attribution(this);
     /** The conversation's folder: files, the viewer, changes, and uploads. */
@@ -422,6 +424,7 @@ export class PocketApp {
             watches: this.watches,
             repoWatches: this.repoWatches,
             memory: this.memory,
+            usage: this.usage,
         };
 
         this.host = host;
@@ -466,6 +469,8 @@ export class PocketApp {
         const conversations = await this.#recover(storage);
 
         await this.spend.load(conversations);
+
+        await this.usage.load(conversations);
 
         this.#unsubscribeCommits = this.harness.subscribeCommits((publication) =>
             this.#committed(publication),
@@ -576,6 +581,8 @@ export class PocketApp {
                 change.conversationId !== undefined
             ) {
                 this.spend.usageChanged(change.conversationId, change.value as UsageState | null);
+            } else if (change.type === "entry" && change.value.kind === "pi.assistant") {
+                this.usage.entryCommitted(change.value);
             }
         }
 
@@ -2481,6 +2488,7 @@ export class PocketApp {
             clearTimeout(this.#sessionsTimer);
             this.alerts.close();
             this.spend.close();
+            this.usage.close();
             this.#unsubscribeCommits?.();
             this.#unsubscribeApprovals?.();
             this.#unsubscribeBrowsers?.();

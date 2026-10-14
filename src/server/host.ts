@@ -10,6 +10,7 @@ import type { Pip } from "./pip.ts";
 import type { PipCompaction } from "./pip-compact.ts";
 import type { Schedules } from "./schedules.ts";
 import type { RepoWatches } from "./repo-watches.ts";
+import type { Usage } from "./usage.ts";
 import type { Watches } from "./watches.ts";
 
 export interface ApprovalRequest {
@@ -136,6 +137,8 @@ export interface PocketHost {
     modelProblem(ref: ModelRef, fresh?: boolean): Promise<string | undefined>;
     /** Who Pi works for in a conversation now: whose message led to its current work. */
     requesterOf(conversationId: ConversationId): string | undefined;
+    /** Local usage as the sessions made it, and each provider's quota (`usage.ts`). */
+    readonly usage: Usage;
     /** Report something odd to the log and the connected clients: with `conversationId`, to that session's tabs only. */
     notice(
         level: "info" | "warning" | "error",

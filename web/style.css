@@ -5809,6 +5809,97 @@ textarea.notes {
     gap: 0.3rem;
 }
 
+/* Usage: the window's cards, the providers' quota bars, and the switcher beside them. */
+.usage-windows {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.usage-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.4rem;
+    margin: 0.5rem 0;
+}
+
+.usage-card {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+.usage-card-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.usage-card-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0.1rem 0;
+}
+
+.usage-provider {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.usage-provider:last-child {
+    border-bottom: none;
+}
+
+.usage-provider-name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.usage-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.usage-bar-row {
+    margin: 0.35rem 0 0.15rem;
+}
+
+.usage-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+}
+
+.usage-bar {
+    height: 0.4rem;
+    margin-top: 0.2rem;
+    border-radius: 999px;
+    background: var(--line);
+    overflow: hidden;
+}
+
+.usage-bar-fill {
+    height: 100%;
+    min-width: 2px;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+.usage-bar-fill.hot {
+    background: var(--warn);
+}
+
 .limit-edit input {
     width: 6rem;
 }

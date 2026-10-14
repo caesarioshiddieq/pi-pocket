@@ -12,6 +12,7 @@ import {
     type EntryId,
     type TaskId,
 } from "@earendil-works/pi-durable";
+import type { ProviderQuota } from "./usage-providers.ts";
 import type { Repeat } from "./when.ts";
 import type { Worktree } from "./worktrees.ts";
 
@@ -628,4 +629,44 @@ export const RepoWatchesDoc = defineDoc<{ items: Record<string, RepoWatch> }>({
     version: 1,
     scope: "session",
     initial: () => ({ items: {} }),
+});
+
+/** One hour's work, keyed `<userId>|<provider>/<modelId>`: tokens and what they cost. */
+export type UsageCell = {
+    calls: number;
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cost: number;
+};
+
+/**
+ * Local usage, as Pi Pocket's own sessions made it: one cell per hour (epoch seconds) per person per model, built from
+ * the assistant entries each commit brings and backfilled from history at startup. `watermarks` holds, per
+ * conversation, the newest entry already counted, so nothing is counted twice.
+ */
+export const UsageIndexDoc = defineDoc<{
+    hours: Record<string, Record<string, UsageCell>>;
+    watermarks: Record<string, number>;
+}>({
+    kind: "pocket.usage-index",
+    version: 1,
+    scope: "session",
+    initial: () => ({ hours: {}, watermarks: {} }),
+});
+
+/** The newest quota read of each provider's own usage endpoint, with when it was taken. */
+export const UsageQuotaDoc = defineDoc<{
+    providers: Record<string, ProviderQuota>;
+    /** When each provider's window last crossed the warning threshold, by its reset time, so a new window warns again. */
+    warned: Record<string, number>;
+    /** When the next background refresh is due (0: none scheduled), and how many refreshes failed in a row. */
+    nextAt: number;
+    errors: number;
+}>({
+    kind: "pocket.usage-quota",
+    version: 1,
+    scope: "session",
+    initial: () => ({ providers: {}, warned: {}, nextAt: 0, errors: 0 }),
 });

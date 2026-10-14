@@ -124,6 +124,11 @@ export class Spend {
         );
     }
 
+    /** The same, for the parts of the app that count a conversation's work their own way (usage). */
+    payerOf(id: ConversationId): string {
+        return this.#payer(id);
+    }
+
     /** Store the spend added to people, then stop work that went past a limit. */
     async #count(): Promise<void> {
         const owed = [...this.#owed];

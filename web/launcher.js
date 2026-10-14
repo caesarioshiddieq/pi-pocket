@@ -250,6 +250,7 @@ function actionItems() {
             run: () => openSheet({ type: "providers" }),
         },
         { label: "Extensions", icon: "shield", run: () => openSheet({ type: "extensions" }) },
+        { label: "Usage", icon: "pulse", run: () => openSheet({ type: "usage" }) },
         { label: "Spend", icon: "pulse", run: () => openSheet({ type: "spend" }) },
         collab()
             ? {
