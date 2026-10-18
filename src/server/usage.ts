@@ -6,6 +6,7 @@
  * once, in the app and the log.
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { Usage as AiUsage } from "@earendil-works/pi-ai";
 import type { ConversationId, Cursor, EntryId, EntryRecord } from "@earendil-works/pi-durable";
 import type { PocketApp } from "./app.ts";
@@ -139,7 +140,7 @@ export class Usage {
         await this.#backfill(ids);
 
         // Nothing signed in to ask: no background poll at all. The tool and the sheet still refresh on demand.
-        if (Object.keys(await readCredentials(this.#app.host.agentDir)).length > 0) {
+        if (Object.keys(await readCredentials(getAgentDir())).length > 0) {
             this.#polling = true;
             this.#scheduleQuota(0);
         }
@@ -451,7 +452,7 @@ export class Usage {
         this.#quotaRunning = true;
 
         try {
-            const providers = await queryAll(this.#app.host.agentDir);
+            const providers = await queryAll(getAgentDir());
             const stored = await this.#app.harness.commit(async (tx) => {
                 const doc = await tx.doc(UsageQuotaDoc);
 
