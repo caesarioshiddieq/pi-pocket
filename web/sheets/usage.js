@@ -189,7 +189,7 @@ function LocalRows({ window: view }) {
                 .map((model) =>
                     h(
                         "div",
-                        { class: "spend-row", key: model.key || "-" },
+                        { class: "spend-row usage-row", key: model.key || "-" },
                         h("span", { class: "grow" }, model.key || "(unknown)"),
                         h("span", { class: "mono" }, line(model)),
                     ),
@@ -202,7 +202,7 @@ function LocalRows({ window: view }) {
             view.people.map((person) =>
                 h(
                     "div",
-                    { class: "spend-row", key: person.id || person.name },
+                    { class: "spend-row usage-row", key: person.id || person.name },
                     h("span", { class: "grow" }, person.name),
                     h("span", { class: "mono" }, line(person)),
                 ),

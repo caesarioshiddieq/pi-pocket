@@ -8065,6 +8065,16 @@ textarea.notes {
     text-align: right;
 }
 
+/* The usage sheet's rows carry a whole line of stats, not one number: the spend sheet's fixed 64px mono column
+   would wrap them word by word on a phone. */
+.usage-row > .mono {
+    width: auto;
+    max-width: 100%;
+    margin-left: auto;
+    text-align: right;
+    white-space: nowrap;
+}
+
 .spend-change {
     width: 56px;
     flex: none;
