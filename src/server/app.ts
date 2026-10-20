@@ -612,10 +612,10 @@ export class PocketApp {
             );
             const root = this.rootOf(id);
 
-            // A subagent's call waits on its session's peek tile too.
+            // A subagent's call waits on its session's peek tile too, and its card shows in the session's own view.
             if (root !== id) {
                 void this.#rooms.get(root)?.then(
-                    (room) => room.schedulePeek(),
+                    (room) => room.schedule(),
                     () => {},
                 );
             }
