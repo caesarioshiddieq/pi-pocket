@@ -49,7 +49,7 @@ While it runs: **q** quit · **r** restart server · **a** change access · **o*
 - **Omarchy colors.** Every Omarchy theme's colors, or follow your desktop's live; tiled Hyprland-style windows, a Walker-style launcher (Ctrl/⌘+K) with live color previews, and Hyprland's motion.
 - **Extension gallery.** Find drop-ins and themes other people wrote, read their source or ask Pi to review it, and install them: each file is checked against the index, an extension starts off, and an update shows its diff first. Share your own from Extensions.
 - **Agent Teams.** Off by default. Pi starts linked sessions that work beside the one that started them, and messages them both ways.
-- **Favorite folders.** New session works like a desktop file dialog. Star a folder, then start a session there with Ctrl/⌘+1…9 or from the launcher.
+- **Favorite folders.** New session works like a desktop file dialog and opens in the folder you are already in: star a folder to start a session there with Ctrl/⌘+1…9 or from the launcher, or use **New session here** to stay where you are.
 - **Peek tiles.** One click (or Alt+P) shows your other sessions working beside the one you are in: approve their calls from there, and swap between them with a click. Only the tiles on screen stay live, so a long list scrolls cheaply.
 - **Built for phones.** Streaming answers, Pi's tool calls folded into a timeline with diffs and live output, push notifications you can allow or deny from, sharing into Pi from other apps, and a home-screen app.
 - **Files and review.** The Files tile (Alt+E) shows the session's folder beside the conversation, and Changes reviews every uncommitted change: word-level diffs, split or unified, and files you mark viewed. Code in Pi's replies is colored, and an HTML block previews inline, running on a tap in a sandbox.
@@ -57,7 +57,7 @@ While it runs: **q** quit · **r** restart server · **a** change access · **o*
 - **A built-in browser.** Pi opens, reads, clicks through, and screenshots pages in a real Chromium on the server, and you watch and use the same page in the Browser panel, from a phone too: your dev server on `localhost` included.
 - **Artifacts and subagents.** Sandboxed HTML, Markdown, and SVG artifacts, and background subagents you can open and talk to.
 - **Codemode.** On by default: Pi writes short scripts that call its tools, and every call still goes through the same checks.
-- **Lancet Guard.** Off by default; turn it on in Menu → Extensions. With the [specpi-lancet-guard](https://github.com/TannerMidd/SpecPi) Pi package installed and on, risky bash, write, and edit calls wait for someone in the session to approve.
+- **Lancet Guard.** Off by default; turn it on in Menu → Extensions. With the [specpi-lancet-guard](https://github.com/TannerMidd/SpecPi) Pi package installed and on, risky bash, write, and edit calls wait for someone in the session to approve. The owner downloads its model with one button in Extensions.
 - **Roles, invites, and limits.** Steer or view-only access, to every session or just one, through one-time links and QR codes, with spend limits per person and per session.
 - **Live-editable.** No build step: edit the web app or an extension and it reloads in place. Add your own extensions in `~/.pi-pocket/extensions/`: tools and checks for Pi, and pages, rail buttons, routes, and slash commands for the app.
 

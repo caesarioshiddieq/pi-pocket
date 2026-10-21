@@ -7,8 +7,11 @@ import { createServer, type Server } from "node:http";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createHandler } from "../src/server/http.ts";
 import type { UsageSummary } from "../src/server/usage.ts";
+
+// Imported here, not above: on Node 26 a static import of this module beside helpers' top-level await fails to
+// initialize (the same reason the UI tests load it this way).
+const { createHandler } = await import("../src/server/http.ts");
 
 const dataDir = join(root, "data");
 const agentDir = process.env.PI_CODING_AGENT_DIR!;

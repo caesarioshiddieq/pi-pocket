@@ -6,6 +6,7 @@
  */
 import type { JsonValue } from "@earendil-works/chord";
 import {
+    type CheckpointInfo,
     type ConversationId,
     defineDoc,
     defineDocFamily,
@@ -15,6 +16,16 @@ import {
 import type { ProviderQuota } from "./usage-providers.ts";
 import type { Repeat } from "./when.ts";
 import type { Worktree } from "./worktrees.ts";
+
+/**
+ * Every document here keeps only its current value, so its stored history is one base and the deltas after it, and a
+ * cold read replays them all: without a new base now and then, a busy one (spend, the sessions list) replays tens of
+ * thousands. Writing a base drops the revisions before it. Not part of the stored semantics, so safe to change.
+ */
+const rebased = {
+    checkpointWhen: (_value: unknown, _ops: unknown, info: CheckpointInfo) =>
+        info.deltasSinceBase >= 64,
+};
 
 export type SessionMeta = {
     title?: string;
@@ -44,6 +55,7 @@ export type SessionMeta = {
 export const SessionsDoc = defineDoc<{ items: Record<string, SessionMeta> }>({
     kind: "pocket.sessions",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ items: {} }),
 });
@@ -52,6 +64,7 @@ export const SessionsDoc = defineDoc<{ items: Record<string, SessionMeta> }>({
 export const FolderFavoritesDoc = defineDoc<{ users: Record<string, string[]> }>({
     kind: "pocket.folder-favorites",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ users: {} }),
 });
@@ -63,6 +76,7 @@ export const FolderFavoritesDoc = defineDoc<{ users: Record<string, string[]> }>
 export const LinkedSessionPeersDoc = defineDoc<{ peers: Record<string, number> }>({
     kind: "pocket.linked-session-peers",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -71,11 +85,12 @@ export const LinkedSessionPeersDoc = defineDoc<{ peers: Record<string, number> }
 
 /**
  * Messages between the linked sessions of one team since a person last wrote in any of them, kept on the team's top
- * session (`linked-sessions.ts`): past a limit, sessions stop messaging each other until a person writes.
+ * session (`linked-sessions.ts`). Since 0.19.0 no count stops them: before, sessions stopped past 20 until a person wrote.
  */
 export const LinkedSessionRelayDoc = defineDoc<{ sent: number }>({
     kind: "pocket.linked-session-relay",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -92,6 +107,7 @@ export const LinkedSessionCallsDoc = defineDoc<{
 }>({
     kind: "pocket.linked-session-calls",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -109,6 +125,7 @@ export const AuthorsDoc = defineDoc<{
 }>({
     kind: "pocket.authors",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -140,6 +157,7 @@ export type ArtifactMeta = {
 export const ArtifactsDoc = defineDoc<{ items: Record<string, ArtifactMeta> }>({
     kind: "pocket.artifacts",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -150,6 +168,7 @@ export const ArtifactsDoc = defineDoc<{ items: Record<string, ArtifactMeta> }>({
 export const ArtifactBodyDoc = defineDocFamily<{ content: string }, { content: string }>({
     kind: "pocket.artifact-body",
     version: 1,
+    ...rebased,
     family: true,
     scope: "conversation",
     history: "latest",
@@ -185,6 +204,7 @@ export type PendingReport = { name: string; text: string };
 export const CodemodeStoreDoc = defineDoc<{ values: Record<string, JsonValue> }>({
     kind: "pocket.codemode-store",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -221,6 +241,7 @@ export const SubagentsDoc = defineDoc<{
 }>({
     kind: "pocket.subagents",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     // A fork starts without subagents: they belong to the conversation that spawned them.
@@ -248,6 +269,7 @@ export type ChatMessage = {
 export const ChatDoc = defineDoc<{ messages: ChatMessage[] }>({
     kind: "pocket.chat",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -261,6 +283,7 @@ export const CHAT_LIMIT = 500;
 export const ReactionsDoc = defineDoc<{ entries: Record<string, Record<string, string[]>> }>({
     kind: "pocket.reactions",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -284,6 +307,7 @@ export type Pin = {
 export const PinsDoc = defineDoc<{ items: Pin[] }>({
     kind: "pocket.pins",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -296,6 +320,7 @@ export type Notes = { text: string; rev: number; by?: string; at?: number };
 export const NotesDoc = defineDoc<Notes>({
     kind: "pocket.notes",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -308,6 +333,7 @@ export type Turns = { on: boolean; driver?: string; asks: string[] };
 export const TurnsDoc = defineDoc<Turns>({
     kind: "pocket.turns",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -320,6 +346,7 @@ export type Decision = { allow: boolean; by: string; userId: string; at: number 
 export const DecisionsDoc = defineDoc<{ calls: Record<string, Decision> }>({
     kind: "pocket.decisions",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -336,6 +363,7 @@ export const STOPPED = "stopped before it answered";
 export const PlanDoc = defineDoc<{ on: boolean; by?: string; at?: number }>({
     kind: "pocket.plan",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -371,6 +399,7 @@ export type Schedule = {
 export const ScheduleDoc = defineDoc<{ items: Record<string, Schedule> }>({
     kind: "pocket.schedules",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -397,6 +426,7 @@ export type Goal = {
 export const GoalDoc = defineDoc<{ goal?: Goal }>({
     kind: "pocket.goal",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -413,6 +443,7 @@ export const SpendDoc = defineDoc<{
 }>({
     kind: "pocket.spend",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ people: {}, counted: {} }),
 });
@@ -450,6 +481,7 @@ export type Lesson = {
 export const MemoryDoc = defineDoc<{ items: Record<string, Lesson> }>({
     kind: "pocket.memory",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ items: {} }),
 });
@@ -464,6 +496,7 @@ export const BrowserDoc = defineDoc<{
 }>({
     kind: "pocket.browser",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "current",
@@ -477,6 +510,7 @@ export const BrowserDoc = defineDoc<{
 export const CommandRequestsDoc = defineDocFamily<{ items: Record<string, number> }, null>({
     kind: "pocket.extension-command-request",
     version: 1,
+    ...rebased,
     family: true,
     scope: "conversation",
     history: "latest",
@@ -491,6 +525,7 @@ export const CommandRequestsDoc = defineDocFamily<{ items: Record<string, number
 export const ShellRequestsDoc = defineDoc<{ items: Record<string, number> }>({
     kind: "pocket.shell-requests",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -506,6 +541,7 @@ export const FollowsDoc = defineDoc<{
 }>({
     kind: "pocket.pip-follows",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -522,6 +558,7 @@ export const PipAskedDoc = defineDoc<{
 }>({
     kind: "pocket.pip-asked",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -535,6 +572,7 @@ export const PipAskedDoc = defineDoc<{
 export const PipCompactionDoc = defineDoc<{ counted: number[] }>({
     kind: "pocket.pip-compaction",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -595,6 +633,7 @@ export type PrWatch = {
 export const WatchDoc = defineDoc<{ watch?: PrWatch }>({
     kind: "pocket.pr-watch",
     version: 1,
+    ...rebased,
     scope: "conversation",
     history: "latest",
     fork: "initial",
@@ -633,6 +672,7 @@ export type Hook = {
 export const HooksDoc = defineDoc<{ items: Record<string, Hook> }>({
     kind: "pocket.hooks",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ items: {} }),
 });
@@ -693,6 +733,7 @@ export type RepoWatch = {
 export const RepoWatchesDoc = defineDoc<{ items: Record<string, RepoWatch> }>({
     kind: "pocket.repo-watches",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ items: {} }),
 });

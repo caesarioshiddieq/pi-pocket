@@ -6,6 +6,18 @@ The host does not change when a module reloads. It changes only when the server 
 
 The types are `Host` and the types that it uses, in [types/pocket.d.ts](../../../types/pocket.d.ts). [Types for your editor](types.md) tells you how to import them.
 
+## Running version
+
+### `pocketVersion`
+
+```ts
+readonly pocketVersion: string;
+```
+
+Since 0.16.0 · Stable
+
+The running server's package version, including a pre-release suffix when present. It is read at server startup, not from files that an update replaced later. It is not the extension API level (`web.api`). Check that this member exists on older servers. A version-monitor extension can compare this value with a release obtained by its own server code, then show a notice; this member does not fetch updates or restart the server.
+
 ## Folders
 
 ### `dataDir`
@@ -62,6 +74,20 @@ Since 0.1.0 · Stable
 
 Finds a model from `provider/modelId`, or from a model id alone. The model must be signed in, and its sign-in must work. When there is no such model, it throws an error. The error names no other models: the choice of model is the person's.
 
+### `modelInfo`
+
+```ts
+modelInfo(spec: string): {
+    model: ModelRef;
+    name: string;
+    thinkingLevels: ModelThinkingLevel[];
+} | undefined;
+```
+
+Since 0.16.0 · Stable
+
+Local metadata for one exact `provider/modelId`, including a known model without configured auth. A bare id or unknown pair returns `undefined`. It does not contact a provider, report sign-in details, or list models. Use it to describe the source model or a model already chosen by the owner. It does not authorize its use; starts still check the current model policy and availability.
+
 ### `subagentModels`
 
 ```ts
@@ -81,6 +107,20 @@ modelProblem(ref: ModelRef, fresh?: boolean): Promise<string | undefined>;
 Since 0.13.1 · Stable
 
 Why Pi cannot use a model now, in words that Pi can tell a person. For example, Pi Pocket does not know the model, its provider is not signed in, or its sign-in expired. It is `undefined` when Pi can use the model. With `fresh: true`, it asks the provider about the sign-in again first.
+
+### `shapeModelRequests`
+
+```ts
+shapeModelRequests(
+    shape: (payload: unknown, model: Model<Api>) => unknown | undefined,
+): () => void;
+```
+
+Since 0.18.0 · Experimental
+
+Shapes the request that every model call sends. `shape` gets the payload Pi built and the model, and returns a replacement payload (or a promise of one), or `undefined` to keep it. A shaper that throws is logged and skipped. It runs after Pi and the caller shaped the request, closest to the wire. The return value stops the shaping. Only the modules that the owner turned on shape requests.
+
+A shaper can change what a provider bills or how it answers, and its effect lasts until it is removed. Say so when you ask the owner to turn the module on.
 
 ### `thinkingLevels`
 
@@ -185,7 +225,7 @@ Each call acts as the person that Pi works for in `source`, and that person's ch
 ```ts
 start(
     source: ConversationId,
-    request: { title?: string; message: string; model?: string; thinking?: string },
+    request: { title?: string; message: string; model?: string; thinking?: string; cwd?: string },
     key: string,
 ): Promise<{ session: ConversationId; address: string }>;
 ```
@@ -194,7 +234,7 @@ Since 0.14.0 · Experimental
 
 Makes a session linked to `source` and sends it `message` as its first message. It returns the new session's id, and the address that `source` uses for it.
 
-- The new session works in the folder of `source`. It gets a copy of the agent settings of `source`, but not its history.
+- The new session works in `cwd` when supplied, otherwise the folder of `source`. `cwd` must name an existing folder and uses the normal folder-picker path rules. A blank `cwd` counts as no `cwd`. A relative `cwd` resolves against the folder of the server process, not the folder of the source. `cwd` is since 0.19.0: an older Pi Pocket ignores it and uses the folder of `source`, so a gallery entry that needs it sets `minPocket` to `0.19.0`. It gets a copy of the agent settings of `source`, but not its history.
 - Without `title`, the title is the first line of `message`.
 - `model` is `provider/modelId`. It must be the model of `source`, or a model that the owner lets subagents use. Without it, the session uses the model of `source`.
 - `thinking` is a level no higher than the level of `source`. Without it, the session uses the level of `source`. Pi Pocket lowers it to the highest level that the model has.

@@ -80,8 +80,11 @@ export type Attachment = { path: string; name: string; mime: string; size: numbe
 export interface SubmitRequest {
     text: string;
     attachments?: Attachment[];
-    /** `steer` joins the running work after its current tool round; anything else queues a follow-up while busy. */
-    mode?: "steer" | "followUp";
+    /**
+     * `steer` joins the running work after its current tool round; `interrupt` stops the run at once (as Stop does) and
+     * sends the message to the idle conversation; anything else queues a follow-up while busy.
+     */
+    mode?: "steer" | "followUp" | "interrupt";
     /** Client-generated, so a retried POST does not submit twice. */
     requestId: string;
     /** Send the files the message mentions with `@` along with it, so Pi need not read them first. */
@@ -691,6 +694,10 @@ export class Commands {
         user: User,
         request: SubmitRequest,
         via?: string,
+        admission?: {
+            beforeSubmit(): Promise<{ user: User; context: Context }>;
+            afterSubmit(): void;
+        },
     ): Promise<{ submissionId: SubmissionId; requestId: string }> {
         const app = this.#app;
 
@@ -769,15 +776,46 @@ export class Commands {
                 : requestFor(user.id, clientKey(request.requestId));
         // A failed subagent's failure as the person writes to it: what their message comes to settles it.
         const failure = await this.#failureOf(id);
-        const submission = await conversation.submit(
-            {
-                type: "input",
-                content,
-                whenBusy: request.mode === "steer" ? "steer" : "followUp",
-                requestId,
-            },
-            context,
-        );
+
+        let submitContext = context;
+
+        // Human extension starts acquire a short policy lease after preparation. Its context checks policy again
+        // when durable admission reaches the mutation line, not just before it joins the queue.
+        if (admission !== undefined) {
+            const accepted = await admission.beforeSubmit();
+
+            user = accepted.user;
+            submitContext = accepted.context;
+            submitContext.abortSignal?.throwIfAborted();
+        }
+
+        // Interrupt: stop the run now, rather than waiting for its tool round or turn to end. Like Stop, this withdraws
+        // what waits in the queue. Only a person's own message interrupts, never one sent for them (`via`).
+        // A retried request finds its first submission: it must not stop the run that the first one started. (Two POSTs
+        // of one request at the same moment can both find none and both stop the run: a rare race, left as it is.)
+        if (
+            request.mode === "interrupt" &&
+            via === undefined &&
+            app.isBusy(id) &&
+            (await app.harness.commit((tx) => tx.submissionByRequest(id, requestId), context)) ===
+                undefined
+        ) {
+            await this.#discardReports(id);
+            await conversation.abort(context);
+            await app.collab.activity(id, user, "interrupted the run");
+        }
+
+        const submission = await conversation
+            .submit(
+                {
+                    type: "input",
+                    content,
+                    whenBusy: request.mode === "steer" ? "steer" : "followUp",
+                    requestId,
+                },
+                submitContext,
+            )
+            .finally(() => admission?.afterSubmit());
 
         app.collab.setTyping(id, user, null);
         await this.#touched(id, typed, text === typed ? undefined : text);
@@ -1744,16 +1782,13 @@ export class Commands {
                 await app.conversation(id)
             ).entries({ maxEntryId: (entryId - 1) as unknown as EntryId }, 1, undefined, context)
         ).items[0];
-        const agent: AgentChange =
-            asked === undefined
-                ? {}
-                : {
-                      model: ref,
-                      thinkingLevel: clampThinkingLevel(
-                          model,
-                          (source?.thinkingLevel ?? "off") as ModelThinkingLevel,
-                      ),
-                  };
+        const agent: AgentChange = {
+            model: ref,
+            thinkingLevel: clampThinkingLevel(
+                model,
+                (source?.thinkingLevel ?? "off") as ModelThinkingLevel,
+            ),
+        };
         const label = edit !== undefined ? "edit" : asked !== undefined ? model.name : "retry";
         const forked = await this.#branch(id, user, {
             at: previous?.id as unknown as number | undefined,

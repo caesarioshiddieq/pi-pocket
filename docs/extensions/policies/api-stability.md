@@ -24,7 +24,7 @@ Each item below is public as the reference and the guides describe it: its names
 - The first sentence of the module's `/** … */` comment, which is its description.
 - Files that start with `_` or end in `.test.ts` are not modules.
 - Loading, reloading, and errors ([Modules, loading, and errors](../modules.md)), with the times in [Limits](../reference/limits.md#loading).
-- The types in [types/pocket.d.ts](../../../types/pocket.d.ts): `Module`, `Host`, `SafeText`, `LinkedSessions`, `LinkedSession`, `Web`, `WebRequest`, `WebHandler`, `WebAccess`, `WebMethod`, `Command`, `CommandContext`, `CommandResult`, `BrowserModule`, `Pocket`, the specs and props of what a browser module adds, `Person`, `Role`, and `NoticeLevel`. Import them with `import type` from `./_pocket.d.ts` in the drop-in folder ([Types for your editor](../reference/types.md)): the import goes away at run time.
+- The types in [types/pocket.d.ts](../../../types/pocket.d.ts): `Module`, `Host`, `SafeText`, `LinkedSessions`, `LinkedSession`, `Web`, `WebRequest`, `ConversationWebRequest`, `HumanLinkedSessions`, `HumanLinkedSession`, `WebHandler`, `WebAccess`, `WebMethod`, `Command`, `CommandContext`, `CommandResult`, `BrowserModule`, `Pocket`, the specs and props of what a browser module adds, `Person`, `Role`, and `NoticeLevel`. Import them with `import type` from `./_pocket.d.ts` in the drop-in folder ([Types for your editor](../reference/types.md)): the import goes away at run time.
 - `src/server/host.ts` is internal. Its types (`PocketHost`, `ExtensionWeb`, and the others) are Pi Pocket's own, and can change in any release. `test/public-types.ts` checks that they fit the public types.
 
 ### 2. Names
@@ -38,9 +38,9 @@ Each item below is public as the reference and the guides describe it: its names
 
 These members are public:
 
-- `dataDir`, `agentDir`
+- `dataDir`, `agentDir`, `pocketVersion` (running-server package version, since 0.16.0)
 - `notice(level, message, id?)`
-- `resolveModel(spec)`, `subagentModels()`, `modelProblem(ref, fresh?)`
+- `resolveModel(spec)`, `subagentModels()`, `modelProblem(ref, fresh?)`, `modelInfo(spec)` (exact local metadata, since 0.16.0)
 - `requesterOf(conversationId)`
 - `skillPaths()`, `skills(cwd)`
 - `heldBack(conversationId)`, `onLimitsChanged(listener)`
@@ -54,8 +54,9 @@ The host's members do not change while modules reload. A new member comes only a
 
 ### 4. `web`
 
-- `api`, `module`, `route`, `client`, `command`, `send`, `error`, and `onDispose`.
-- What a route handler gets (`WebRequest`: `method`, `params`, `query`, `body`, `user`, `signal`), and what its answer does.
+- `api`, `module`, `route`, `conversationRoute` (since 0.16.0), `client`, `command`, `send`, `error`, and `onDispose`.
+- What a route handler gets (`WebRequest`: `method`, `params`, `query`, `body`, `user`, `signal`; since 0.16.0 also request-lifetime `snapshot`, `context`, `commit`), and what its answer does.
+- A conversation-bound request's `conversation` metadata and human `linkedSessions.start` / `list`, with their authenticated-actor, receipt, and admission checks (since 0.16.0).
 - The route paths, the methods, the `access` values (`owner`, `steer`, `view`), and the `X-Pocket` header that every call to a route must have.
 
 ### 5. A command's `ctx` and result
@@ -66,10 +67,10 @@ The host's members do not change while modules reload. A new member comes only a
 
 ### 6. `pocket`
 
-- `version`, `module`, `title`.
+- `version`, `module`, `title`, and `pocketVersion` (connected-server package version, since 0.16.0; not the API level).
 - `h`, `html`, `Fragment`, and the hooks: `useState`, `useEffect`, `useLayoutEffect`, `useRef`, `useMemo`, `useCallback`, and `useReducer`.
 - The pieces `Icon`, `Loader`, `Spinner`, `Markdown`, and `Switch`, with the props that [pocket](../reference/pocket.md) gives.
-- `api`, `on`, `rail`, `menu`, `launcher`, `page`, `sheet`, `toolCall`, `openPage`, `closePage`, `openSheet`, `closeSheet`, `notify`, `me`, `conversationId`, `style`, and `onDispose`.
+- `api`, `on`, `rail`, `menu`, `launcher`, `page`, `sheet`, `toolCall`, `openPage`, `closePage`, `openSheet`, `closeSheet`, `notify`, `me`, `conversationId`, `openConversation` (since 0.16.0), `style`, and `onDispose`.
 - What a page's or a sheet's component gets: `pocket`, `close`, and a sheet's `props`.
 - The icon names that [pocket](../reference/pocket.md) lists. Other icon names can go. An unknown name shows `grid`, so a module does not fail.
 - Safe mode: `?noext=1` and `?noext=0` on the app's address.
@@ -138,7 +139,9 @@ All public interfaces are stable, unless the docs mark them experimental or depr
 - **A6. A gallery entry that uses an experimental member should say so in its description.**\
   _Reason:_ the owner then knows that an update of Pi Pocket can break it.
 
-In 0.14, only `host.linkedSessions` is experimental. It changed a lot in the betas, and Agent Teams is its only user. It becomes stable in 0.15 if it does not have to change. All other public members of 0.14 are stable.
+`host.linkedSessions` remains experimental in 0.16.0. The human-bound `linkedSessions` on a conversation route is a separate stable interface, added in 0.16.0. Other public members are stable unless marked otherwise.
+
+Since 0.19.0, these `pocket` members are experimental too: `panel`, `openPanel`, `closePanel`, `status`, `topbar`, `composerButton`, `replyAction`, `insertText`, `arrange`, and their types. The `core:` ids of the items in slots are public, with the same promise as the names of the theme surface.
 
 ### Deprecated
 
@@ -148,7 +151,7 @@ See [Deprecation](#deprecation).
 
 ### `pocketApi`
 
-- `POCKET_API` is one number for the whole public API, on the server and in the browser. `web.api` and `pocket.version` give it. It is 1 from Pi Pocket 0.14.0.
+- `POCKET_API` is one number for the whole public API, on the server and in the browser. `web.api` and `pocket.version` give it. It was 1 from Pi Pocket 0.14.0. It is 2 from 0.19.0, because the Pi Durable 1.2 rename of `content` to `output` breaks a hook or a wrap that returns `content` (A2, A7). The oldest supported version is 1 (A9).
 - **A7. `pocketApi` goes up by one in a release that has a breaking change to a stable member.** A release with many breaking changes adds one.\
   _Reason:_ one number tells if a module can work, with no need to compare release numbers.
 - **A8. Additions do not change `pocketApi`. Changes to experimental members do not change it.**\
@@ -210,6 +213,7 @@ These can change in any release: the words of errors and notices, timing that th
   _Reason:_ authors then read the notes of minor releases only, to know what changes.
 - **A16. Pre-releases (`0.15.0-beta.1`) have no promise.** Members can change from one beta to the next.\
   _Reason:_ betas are for tests of new interfaces before they become stable.
+- Since 0.16.0, `host.pocketVersion` and browser `pocket.pocketVersion` report the running server's package version. The browser value is undefined with an older server. Neither fetches updates or controls restarts. Additions in 0.16.0 leave `pocketApi` at 1.
 - The two numbers move apart. Many releases of Pi Pocket can have `pocketApi` 1. `pocketApi` tells if a module can work. `minPocket` tells from which release.
 
 ### Before 1.0
@@ -261,4 +265,4 @@ These can change in any release: the words of errors and notices, timing that th
 ## Warnings
 
 - Nothing is deprecated now, and Pi Pocket shows no deprecation warnings. The first release that deprecates a public member adds a warning that the owner sees when a module uses it. Its notes say so under "Deprecated".
-- The check for the oldest supported `pocketApi` (A9) comes with `pocketApi` 2. Until then, every version is supported.
+- Since 0.19.0 (`pocketApi` 2), Pi Pocket checks the oldest supported `pocketApi` (A9). It is 1: a module that exports 1, or no `pocketApi`, loads. A module for an older version is refused, with an error that tells the owner to update the module.

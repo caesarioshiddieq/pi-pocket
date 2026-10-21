@@ -25,7 +25,7 @@ export default function createUsage(host: PocketHost) {
             // A member new to the host may be missing while the server runs older code: it comes with a restart.
             if (typeof host.usage?.toolText !== "function") {
                 return {
-                    content: [
+                    output: [
                         {
                             type: "text" as const,
                             text: "Usage is not available yet: the server needs a restart to bring it in.",
@@ -36,7 +36,7 @@ export default function createUsage(host: PocketHost) {
 
             const text = await host.usage.toolText(args.provider);
 
-            return { content: [{ type: "text" as const, text }] };
+            return { output: [{ type: "text" as const, text }] };
         },
     });
 

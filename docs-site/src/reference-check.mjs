@@ -33,7 +33,16 @@ const HEADED = new Map([
 /** Which types each page describes. */
 export const PAGES = {
     "host.md": ["Host", "SafeText", "LinkedSessions", "LinkedSession"],
-    "web.md": ["Web", "WebHandler", "WebRequest", "WebMethod", "WebAccess"],
+    "web.md": [
+        "Web",
+        "WebHandler",
+        "WebRequest",
+        "ConversationWebRequest",
+        "HumanLinkedSessions",
+        "HumanLinkedSession",
+        "WebMethod",
+        "WebAccess",
+    ],
     "pocket.md": [
         "Pocket",
         "BrowserModule",
@@ -43,6 +52,15 @@ export const PAGES = {
         "LauncherSpec",
         "PageSpec",
         "SheetSpec",
+        "PanelSpec",
+        "StatusSpec",
+        "Placement",
+        "TopbarSpec",
+        "ComposerButtonSpec",
+        "Reply",
+        "ReplyActionSpec",
+        "SlotName",
+        "Arrangement",
         "PageProps",
         "SheetProps",
         "ToolCallSpec",
