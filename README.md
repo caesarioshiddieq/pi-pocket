@@ -32,6 +32,16 @@ The launcher asks how your devices should connect, then prints the address, a si
 
 While it runs: **q** quit · **r** restart server · **a** change access · **o** open in browser · **s** show QR code.
 
+## Updating to 0.21.0
+
+Stop the server and back up its complete data folder before the first start of 0.21.0. Run `npm install` after updating the checkout, then start the server again.
+
+Pi Durable 1.4.0 automatically migrates `pocket.sqlite` to schema version 2. Pi Durable 1.3.0 and earlier cannot open the migrated database. To return to an older release, restore the backup with the server stopped; changes made after the backup will not be in it.
+
+Document definitions should name `checkpointWhen` in every `defineDoc` or `defineDocFamily` call. Pi Pocket keeps older drop-ins working by supplying `checkpointWhen: () => false` when it is missing, and logs the module and document kind. Explicit policies stay unchanged. Extensions that use `TaskRuntime.sleep()` must move to durable `sleepUntil()` checkpoints.
+
+Pi Pocket turns off Pi Durable 1.4's task crash-loop guard (`restartLimit: Infinity`) so repeated unclean stops do not park long waits.
+
 ## Docker and Podman
 
 A container image and a Compose file are included. Extensions, themes, Pi's sign-ins, the database, and the workspace are bind-mounted from the host, so they survive rebuilds and stay editable outside the container.

@@ -600,6 +600,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                 defaultModel?: unknown;
                 pipCompactAt?: unknown;
                 subagentModels?: unknown;
+                limitWaitHours?: unknown;
             }>(request);
 
             // One at a time: a second that fails must not leave the first changed.
@@ -609,6 +610,7 @@ export function createApi(options: HttpOptions, auth: Auth) {
                     body.defaultModel,
                     body.pipCompactAt,
                     body.subagentModels,
+                    body.limitWaitHours,
                 ].filter((value) => value !== undefined).length > 1
             ) {
                 throw new HttpError(400, "Change one setting at a time.");
@@ -621,6 +623,11 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
             if (body.pipCompactAt !== undefined) {
                 await app.setPipCompactAt(user, body.pipCompactAt);
+            }
+
+            // How long a run waits for a provider's limit to clear: the owner's (checked in `app.ts`).
+            if (body.limitWaitHours !== undefined) {
+                await app.setLimitWaitHours(user, body.limitWaitHours);
             }
 
             if (body.approvalRule !== undefined) {

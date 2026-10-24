@@ -12,6 +12,8 @@ The version goes up only when a change breaks something that modules use. Additi
 - **The oldest supported version is 1.** A module that exports `pocketApi = 1`, or no `pocketApi`, still loads. A module for an older version than 1 does not load.
 - **A module that returns `output` exports `pocketApi = 2`.** Pi Pocket 0.18 then refuses it with a clear message, and does not give the model an empty result.
 
+Since 0.21.0, document definitions should name `checkpointWhen`; Pi Pocket supplies `() => false` for older drop-ins when it is missing.
+
 ## `pocketApi`
 
 A module can export `pocketApi`: the server module, the browser module, or both.
@@ -78,3 +80,4 @@ Each member in the reference has its own Since line. These parts came together:
 | `host.fetchPublic` (experimental)                                                                                                    | 0.20.0 |
 | Keys in the message boxes: `pocket.composerKey` (experimental)                                                                       | 0.20.0 |
 | The session's messages: `pocket.onConversation`, `messages`, `reveal` (experimental)                                                 | 0.20.0 |
+| `group` in `pocket.menu` (experimental)                                                                                              | 0.21.0 |
