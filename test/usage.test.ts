@@ -279,14 +279,14 @@ test("a restart backfills the index from history, counting nothing twice", async
     const data = await summary();
     const before = windowOf(data, "all").cards;
 
-    // The same folder again is a restart: usage loads, backfills, and subscribes after.
-    const reopened = await openApp(scriptedModel());
-    const after = windowOf(reopened.usage.summary(owner(reopened)), "all").cards;
+    // A restart: the first server closes (0.21's lock refuses a second one on the same folder), then the
+    // same folder opens again. Usage loads, backfills, and subscribes after.
+    await app.close();
+    app = await openApp(scriptedModel());
+    const after = windowOf(app.usage.summary(owner(app)), "all").cards;
 
     assert.equal(after.calls, before.calls, "nothing added, nothing lost");
     assert.equal(after.tokens, before.tokens);
-
-    await reopened.close();
 });
 
 test("WINDOWS has the window the sheet shows, newest first", () => {
