@@ -9,6 +9,7 @@ import {
     openApp,
     owner,
     scriptedModel,
+    fakeTab,
     until,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
@@ -397,3 +398,70 @@ test("an approval notification offers Allow only to people who may allow, and on
         await app.setApprovalRule(owner(app), "anyone");
     }
 });
+test("a subagent's call waits in its session: the card shows there and in the session under it, not elsewhere", async () => {
+    const elsewhere = await newSession(app);
+    const id = await newSession(app);
+
+    await sayAs(owner(app), id, "start a helper");
+    const helper = (await app.harness.snapshot(SubagentsDoc, id, context))!.agents.helper!
+        .conversationId;
+
+    await until(
+        async () =>
+            (await modelTexts(app, id)).some((text) => text.includes("[subagent helper answered")),
+        "the helper to report",
+    );
+
+    const session = fakeTab(id, owner(app));
+    const child = fakeTab(helper, owner(app));
+    const other = fakeTab(elsewhere, owner(app));
+
+    await app.attach(session.client);
+    await app.attach(child.client);
+    await app.attach(other.client);
+
+    try {
+        type Row = { id: string; conversationId: ConversationId };
+        const waiting = (tab: ReturnType<typeof fakeTab>) =>
+            (tab.field("approvals") ?? []) as unknown as Row[];
+        const asked = ask(helper, "rm -rf docs");
+
+        await until(
+            () =>
+                waiting(session).some((each) => each.id === asked.request.id) &&
+                waiting(child).some((each) => each.id === asked.request.id),
+            "the helper's call to show in the session under it and in its own view",
+        );
+        assert.deepEqual(
+            waiting(session).map((each) => each.id),
+            [asked.request.id],
+            "the session shows the subagent's card, as it makes the session wait",
+        );
+        assert.equal(
+            waiting(session)[0]!.conversationId,
+            helper,
+            "the card still says which conversation asked",
+        );
+        assert.deepEqual(
+            waiting(child).map((each) => each.id),
+            [asked.request.id],
+            "the subagent keeps its own card",
+        );
+        assert.deepEqual(waiting(other), [], "another session sees nothing of it");
+
+        assert.equal(await app.answerApproval(asked.request.id, false, owner(app)), true);
+        await asked.answered;
+        await until(
+            () =>
+                waiting(session).length === 0 &&
+                waiting(child).length === 0 &&
+                waiting(other).length === 0,
+            "the answered card to go from every view",
+        );
+    } finally {
+        for (const tab of [session, child, other]) {
+            app.detach(tab.client);
+        }
+    }
+});
+

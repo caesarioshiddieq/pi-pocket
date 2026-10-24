@@ -550,6 +550,9 @@ export class Usage {
     }
 
     close(): void {
+        // A refresh that finishes after this must not schedule another one: on a same-process reopen the old
+        // poller would outlive the closed server.
+        this.#polling = false;
         clearTimeout(this.#timer);
         clearTimeout(this.#quotaTimer);
     }

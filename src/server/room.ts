@@ -18,6 +18,7 @@ import type {
 import type { PocketApp } from "./app.ts";
 import type { Head } from "./branches.ts";
 import type { User } from "./config.ts";
+import type { ApprovalRequest } from "./host.ts";
 import {
     type ArtifactMeta,
     ArtifactsDoc,
@@ -698,7 +699,7 @@ export class Room {
             stats: projectStats(view.docs["pi.usage"] as UsageState | undefined, view.entries),
             clients: [...new Set([...this.clients].map((each) => each.id))].length,
             viewers: [...new Set([...this.clients].map((each) => each.user.name))],
-            approvals: this.#app.approvals.forConversation(this.id),
+            approvals: this.#waiting(),
             ...fields,
         });
     }
@@ -980,13 +981,7 @@ export class Room {
                     ...(record.askedAt === undefined ? {} : { askedAt: record.askedAt }),
                 })),
             // Its own calls waiting for someone; for a session, its subagents' too, as they make the session wait.
-            approvals: approvals
-                .filter(
-                    (request) =>
-                        request.conversationId === this.id ||
-                        this.#app.rootOf(request.conversationId) === this.id,
-                )
-                .map((request) => ({
+            approvals: this.#waiting().map((request) => ({
                     id: request.id,
                     conversationId: request.conversationId,
                     tool: request.tool,
@@ -997,6 +992,20 @@ export class Room {
                         : { requestedBy: request.requestedBy }),
                 })),
         };
+    }
+
+    /**
+     * The calls waiting on this conversation and, for a session, on the subagents under it: a subagent's call makes the
+     * session wait, so its card shows in the session that started it, where the person answering it is.
+     */
+    #waiting(): ApprovalRequest[] {
+        return this.#app.approvals
+            .all()
+            .filter(
+                (request) =>
+                    request.conversationId === this.id ||
+                    this.#app.rootOf(request.conversationId) === this.id,
+            );
     }
 
     /** Is this person here, in any tab? */
