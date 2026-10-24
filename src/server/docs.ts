@@ -808,6 +808,7 @@ export const UsageIndexDoc = defineDoc<{
 }>({
     kind: "pocket.usage-index",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ hours: {}, watermarks: {} }),
 });
@@ -823,6 +824,7 @@ export const UsageQuotaDoc = defineDoc<{
 }>({
     kind: "pocket.usage-quota",
     version: 1,
+    ...rebased,
     scope: "session",
     initial: () => ({ providers: {}, warned: {}, nextAt: 0, errors: 0 }),
 });
