@@ -121,6 +121,8 @@ export type PeekSummary = {
         subject: string;
         reason: string;
         requestedBy?: string;
+        /** An extension's question (`host.ask`): answered on its card, where its fields are. */
+        form?: true;
     }[];
 };
 
@@ -990,6 +992,7 @@ export class Room {
                     ...(request.requestedBy === undefined
                         ? {}
                         : { requestedBy: request.requestedBy }),
+                    ...(request.form === undefined ? {} : { form: true as const }),
                 })),
         };
     }

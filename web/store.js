@@ -1,7 +1,8 @@
 // App state, the server connection, and API calls. Components read `store.state` and re-render on `store.subscribe`.
 import { onRoute, pushRoute } from "./back.js";
-import { sessionForest } from "./session-tree.js";
+import { sessionForest, unfolded } from "./session-tree.js";
 import { liveMessage } from "./live.js";
+import { fitClock, moment } from "./clock.js";
 
 /** A random id. crypto.randomUUID only exists on https and localhost pages; plain-http network addresses lack it. */
 export function uid() {
@@ -104,6 +105,9 @@ function readExtPanel() {
     }
 }
 
+/** Where this browser keeps the sessions whose linked sessions are folded away (`toggleFoldedLinked`). */
+const FOLDED_LINKED_KEY = "pocket.foldedLinked";
+
 export const store = {
     state: {
         me: undefined, // undefined: unknown, null: signed out
@@ -123,6 +127,8 @@ export const store = {
         /** Sessions marked unread in this browser: an id each, until opened again. */
         unread: unreadOf(),
         conversationId: routeConversation(),
+        /** Sessions whose linked sessions are folded away in the list: this browser's choice (`toggleFoldedLinked`). */
+        foldedLinked: readFoldedLinked(),
         view: emptyView(),
         /** How far this browser has read each session's chat, by id: what `pocket.chatRead.<id>` keeps. */
         chatReads: firstReads,
@@ -294,32 +300,118 @@ export function sessionUnread(session, state = store.state) {
  * (`session-tree.js`). Archived sessions are left out.
  */
 export function workspaceOrder(state = store.state) {
-    const { sessions, pinned: pins } = state;
+    const { sessions, pinned: pins, foldedLinked, conversationId } = state;
 
     // The list, the rail, the home screen, and peek tiles all ask as they draw: the order is made once for each list.
-    if (ordered.sessions === sessions && ordered.pinned === pins) {
+    if (
+        ordered.sessions === sessions &&
+        ordered.pinned === pins &&
+        ordered.folded === foldedLinked &&
+        ordered.open === conversationId
+    ) {
         return ordered.order;
     }
 
-    const active = sessions.filter((session) => !session.archived);
-    const { roots, rows } = sessionForest(active, { pinned: pins });
-    const family = (root) => rows.get(root.id).map((row) => row.session);
-    const byId = new Map(roots.map((root) => [root.id, root]));
-    const pinned = pins.map((id) => byId.get(id)).filter(Boolean);
-    const first = new Set(pinned);
-    // Shared by every caller until the next list: frozen, so none changes it for the others.
-    const order = Object.freeze([
-        ...pinned.flatMap(family),
-        ...roots.filter((root) => !first.has(root)).flatMap(family),
-    ]);
+    // Linked sessions folded away are out of the order too: the numbers and Alt+arrows follow what shows.
+    const order = orderOf(state, foldsNow(state));
 
-    ordered = { sessions, pinned: pins, order };
+    ordered = { sessions, pinned: pins, folded: foldedLinked, open: conversationId, order };
 
     return order;
 }
 
+/**
+ * Every session that is not archived, in workspace order, folded ones too: for finding a session (the launcher), where a
+ * fold must not hide one that waits.
+ */
+export function sessionOrder(state = store.state) {
+    const { sessions, pinned: pins } = state;
+
+    if (orderedAll.sessions !== sessions || orderedAll.pinned !== pins) {
+        orderedAll = { sessions, pinned: pins, order: orderOf(state, new Set()) };
+    }
+
+    return orderedAll.order;
+}
+
+/** Sessions in workspace order, with the linked sessions under `folds` left out. */
+function orderOf(state, folds) {
+    const { sessions, pinned: pins } = state;
+    const active = sessions.filter((session) => !session.archived);
+    const { roots, rows } = sessionForest(active, { pinned: pins });
+    const family = (root) => unfolded(rows.get(root.id), folds).map((row) => row.session);
+    const byId = new Map(roots.map((root) => [root.id, root]));
+    const pinned = pins.map((id) => byId.get(id)).filter(Boolean);
+    const first = new Set(pinned);
+
+    // Shared by every caller until the next list: frozen, so none changes it for the others.
+    return Object.freeze([
+        ...pinned.flatMap(family),
+        ...roots.filter((root) => !first.has(root)).flatMap(family),
+    ]);
+}
+
 /** The last workspace order, and the lists it was made from. */
-let ordered = { sessions: null, pinned: null, order: [] };
+let ordered = { sessions: null, pinned: null, folded: null, open: null, order: [] };
+/** The last order of every session, folded ones too. */
+let orderedAll = { sessions: null, pinned: null, order: [] };
+
+function readFoldedLinked() {
+    try {
+        const kept = JSON.parse(localStorage.getItem(FOLDED_LINKED_KEY) ?? "[]");
+
+        return Array.isArray(kept) ? kept.filter((id) => Number.isSafeInteger(id)) : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * The folds that apply now: a session whose linked sessions are folded, but not one above the open session, which
+ * always shows.
+ */
+export function foldsNow(state = store.state) {
+    const folds = new Set(state.foldedLinked);
+    const byId = new Map(state.sessions.map((session) => [session.id, session]));
+    const seen = new Set();
+
+    for (
+        let at = byId.get(state.conversationId)?.linkedFrom?.id;
+        at !== undefined && !seen.has(at);
+        at = byId.get(at)?.linkedFrom?.id
+    ) {
+        seen.add(at);
+        folds.delete(at);
+    }
+
+    return folds;
+}
+
+/** Fold a session's linked sessions away in the list, or show them again; kept for this browser, its other tabs too. */
+export function toggleFoldedLinked(id) {
+    const known = new Set(store.state.sessions.map((session) => session.id));
+    // Sessions that are gone are let go of as the choice is saved.
+    const next = store.state.foldedLinked.filter((each) => each !== id && known.has(each));
+
+    if (!store.state.foldedLinked.includes(id)) {
+        next.push(id);
+    }
+
+    try {
+        localStorage.setItem(FOLDED_LINKED_KEY, JSON.stringify(next));
+    } catch {
+        // Storage refused (a private window): the fold holds until the page reloads.
+    }
+
+    store.set({ foldedLinked: next });
+}
+
+// Another tab of this browser folded or unfolded: this one follows.
+addEventListener("storage", (event) => {
+    if (event.key === FOLDED_LINKED_KEY) {
+        store.set({ foldedLinked: readFoldedLinked() });
+    }
+});
 
 /** Server features the web app may use. `collab` 2 adds roles, take turns, reactions, pins, notes, mentions, push. */
 export const collab = () => (store.state.server?.collab ?? 0) >= 2;
@@ -731,18 +823,24 @@ function keptEach(had, next) {
         : items;
 }
 
-/** How far the server's clock is ahead of this browser's, from its last hello (`seen.js`). */
-let clockOffset = 0;
+/** How far the server's clock is ahead of this browser's, from its hellos (`seen.js`); undefined before the first. */
+let clockOffset;
 
-export const serverClockOffset = () => clockOffset;
+export const serverClockOffset = () => clockOffset ?? 0;
+
+/**
+ * When this tab asked for the hello its new connection brings first (`fitClock`): the server reads its clock after
+ * that. Undefined for a hello the server sends of itself, or after a stream reconnects by itself.
+ */
+let helloAsked;
 
 /**
  * The server's facts from a hello. Its clock (`now`) is new in each one and is no change to them: the clock goes to
- * `clockOffset`, and the facts keep the clock of the hello that brought them.
+ * `clockOffset`, and the facts keep the clock of the hello that brought them. `asked`: when this tab asked for it.
  */
-function keptServer(had, next) {
+function keptServer(had, next, asked) {
     if (typeof next?.now === "number") {
-        clockOffset = next.now - Date.now();
+        clockOffset = fitClock(clockOffset, next.now, moment(), asked);
     }
 
     return had && next && sameJson({ ...had, now: 0 }, { ...next, now: 0 }) ? had : next;
@@ -772,14 +870,17 @@ const handlers = {
     // Sent again on each connect, mostly as it was: what is the same keeps its identity (`kept`).
     hello: (data) => {
         const state = store.state;
+        // Only a new connection's first hello answers this tab's asking; any later one, the server sent of itself.
+        const asked = helloAsked;
 
+        helloAsked = undefined;
         setChanged({
             me: kept(state.me, data.user),
             users: keptEach(state.users, data.users),
             folderFavorites: kept(state.folderFavorites, data.folderFavorites ?? []),
             models: kept(state.models, data.models),
             guard: kept(state.guard, data.guard),
-            server: keptServer(state.server, data.server),
+            server: keptServer(state.server, data.server, asked),
             // Every theme folder (`theme.js`): an older server lists none.
             themeList: kept(state.themeList, Array.isArray(data.themes) ? data.themes : []),
             // This connection's id, which peek lists name (`peeks.js`). `GET /api/me` answers without one.
@@ -911,6 +1012,7 @@ addEventListener("pageshow", (event) => {
 
 /** Server-sent events: one long response the server writes to as things change. */
 function streamEvents(query) {
+    helloAsked = moment();
     const events = new EventSource(`/api/events?${query}`);
     /** The first batch arrived whole: the session's view, or the session list when no session is open. */
     let settled = false;
@@ -1015,6 +1117,7 @@ function pollEvents(query) {
 
         while (!stopped) {
             request = new AbortController();
+            const asked = moment();
 
             try {
                 const response = await fetch(
@@ -1040,9 +1143,11 @@ function pollEvents(query) {
                 }
 
                 if (data.session !== session) {
-                    // A new session (first poll, or the server restarted): it starts with hello and a full view.
+                    // A new session (first poll, or the server restarted): it starts with hello and a full view. The
+                    // server made that session, and read the hello's clock, after this request went out.
                     session = data.session;
                     ack = 0;
+                    helloAsked = asked;
                 }
 
                 failures = 0;
@@ -1208,6 +1313,7 @@ onRoute(() => {
 
 export async function start() {
     try {
+        const asked = moment();
         const hello = await api("me");
 
         store.set({
@@ -1215,7 +1321,7 @@ export async function start() {
             users: hello.users,
             models: hello.models,
             guard: hello.guard,
-            server: keptServer(store.state.server, hello.server),
+            server: keptServer(store.state.server, hello.server, asked),
             themeList: Array.isArray(hello.themes) ? hello.themes : [],
         });
         connect();
@@ -1310,7 +1416,9 @@ export const actions = {
     /** Watch the session's pull request: its branch's, or `pr` (a number or address). */
     watchPr: (pr) => api(`c/${current()}/watch`, pr ? { pr } : {}),
     unwatchPr: () => api(`c/${current()}/watch`, { stop: true }),
-    approve: (id, allow) => api(`approvals/${encodeURIComponent(id)}`, { allow }),
+    /** Allow or deny a call; an ask (`host.ask`) is allowed with what was typed in its fields. */
+    approve: (id, allow, values) =>
+        api(`approvals/${encodeURIComponent(id)}`, { allow, ...(values ? { values } : {}) }),
     /** `worktree`: the session works in a git worktree of its own, made from the folder. */
     createSession: (cwd, { worktree = false } = {}) =>
         api("sessions", { cwd, ...(worktree ? { worktree } : {}) }),

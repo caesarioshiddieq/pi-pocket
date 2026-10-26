@@ -225,6 +225,36 @@ export const ArtifactSharesDoc = defineDoc<{ items: Record<string, ArtifactShare
     initial: () => ({ items: {} }),
 });
 
+/**
+ * A page that an extension module shows to anyone with its address (`/l/<token>`, `public-links.ts`), under a token
+ * that is the whole of the access: no sign-in. The module's own page handler draws it.
+ */
+export type PublicLink = {
+    /** The module that made it, and whose page handler answers it. */
+    module: string;
+    createdAt: number;
+    /** When it closes. A link always closes: at most `MAX_LINK_HOURS` after it was made. */
+    expiresAt: number;
+    /** How many answered posts it takes still; absent: any number until it closes. 0: it has closed. */
+    uses?: number;
+    /** When its last use was claimed: kept a while after, so a page that refuses the post can give the use back. */
+    usedAt?: number;
+    /** Who it was made for (a person's id), and the session it is about, when the module says. */
+    by?: string;
+    conversation?: number;
+    /** The module's own small JSON value. */
+    data?: JsonValue;
+};
+
+/** The public links of the whole app, by their token. */
+export const PublicLinksDoc = defineDoc<{ items: Record<string, PublicLink> }>({
+    kind: "pocket.public-links",
+    version: 1,
+    ...rebased,
+    scope: "session",
+    initial: () => ({ items: {} }),
+});
+
 export type SubagentRecord = {
     conversationId: ConversationId;
     /** Answers already reported to the parent: several messages can end in one answer, reported once. */
@@ -389,7 +419,8 @@ export const TurnsDoc = defineDoc<Turns>({
     initial: () => ({ on: false, asks: [] }),
 });
 
-export type Decision = { allow: boolean; by: string; userId: string; at: number };
+/** `ask`: an extension's question (`host.ask`), answered or declined rather than allowed or denied. Since 0.22.0. */
+export type Decision = { allow: boolean; by: string; userId: string; at: number; ask?: true };
 
 /** Who allowed or denied each tool call Lancet Guard asked about, by tool call id. */
 export const DecisionsDoc = defineDoc<{ calls: Record<string, Decision> }>({
@@ -447,6 +478,55 @@ export type Schedule = {
 /** Messages that go to Pi later, or on repeat. A fork starts without them: they belong to who set them up. */
 export const ScheduleDoc = defineDoc<{ items: Record<string, Schedule> }>({
     kind: "pocket.schedules",
+    version: 1,
+    ...rebased,
+    scope: "conversation",
+    history: "latest",
+    fork: "initial",
+    initial: () => ({ items: {} }),
+});
+
+/** A command Pi started in the background (`background.ts`), and how it ended. */
+export type BackgroundTask = {
+    /** Short and stable: what Pi uses to read, stop, or name it. */
+    id: string;
+    command: string;
+    cwd: string;
+    /** Its process, the leader of its own process group; 0 while it is starting. */
+    pid: number;
+    /** When its process started, in the kernel's clock ticks since boot: with `pid`, what says it is still the same. */
+    startTicks?: number;
+    startedAt: number;
+    /** `starting` from when it is reserved until its process is known; `running` while any process of its group runs. */
+    status: "starting" | "running" | "exited" | "stopped" | "lost";
+    /** Its exit code, once it exited by itself. */
+    code?: number;
+    /** `split`'s exit code, when writing its log failed (a full disk): its output may stop short. */
+    logFailed?: number;
+    /** Why Pi Pocket stopped it, when it did of itself (its output came too fast to keep). */
+    why?: string;
+    /** Processes it started that left its group and still ran when it ended (a daemon): a stop ends them. */
+    left?: number[];
+    /** The machine's boot it started in: a task of another boot has no process left. */
+    boot?: string;
+    endedAt?: number;
+    /** Whether Pi gets a message when it ends. */
+    notify: boolean;
+    /** Whom Pi worked for when it started the command: its message goes out as their work. */
+    requestedBy?: string;
+    /** The durable task that watches it. */
+    taskId: TaskId;
+    /** Set by the same call already, when a tool call is replayed: its `taskId:callId`. */
+    key?: string;
+    /** The size of its log's segments, in bytes: a segment's place in the output follows from its number. */
+    segment?: number;
+    /** How much of its output Pi has read, in bytes from its very start (counting what a sweep removed). */
+    read: number;
+};
+
+/** Commands Pi runs in the background. A fork starts without them: their processes belong to the session they were started in. */
+export const BackgroundDoc = defineDoc<{ items: Record<string, BackgroundTask> }>({
+    kind: "pocket.background",
     version: 1,
     ...rebased,
     scope: "conversation",

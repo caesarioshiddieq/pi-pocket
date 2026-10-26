@@ -77,6 +77,8 @@ const KINDS = [
 ];
 /** What a rail button, menu row, launcher action, or status item can open: one of the module's own. */
 const OPENS = ["page", "sheet", "panel"];
+/** The event core sends a module's tabs when the owner changes its settings (`app.setExtensionSettings`). */
+const SETTINGS_EVENT = "pocket:settings";
 /** The most text `pocket.insertText` puts into the message box at once. */
 const INSERT_MAX = 100_000;
 /** The most of a message's text `pocket.messages` gives, and the most messages in a page. */
@@ -1070,6 +1072,31 @@ function pocketFor(record) {
 
             return (async () => api(routeOf(record.module, path), body, options))();
         },
+        /**
+         * The module's settings (`web.settings` on the server) as the person in this tab may read them: `{ fields,
+         * values, set }`, with a secret's value left out (only whether it is `set`).
+         */
+        settings: () => {
+            tick(record);
+
+            return (async () => api(`extension-settings/${encodeURIComponent(record.module)}`))();
+        },
+        /** Hear when the owner changes the module's settings; returns how to stop. */
+        onSettings(run) {
+            tick(record);
+
+            if (typeof run !== "function") {
+                throw new Error("pocket.onSettings: give it a function");
+            }
+
+            const listener = { event: SETTINGS_EVENT, run: () => run() };
+
+            if (live()) {
+                record.listeners.add(listener);
+            }
+
+            return () => record.listeners.delete(listener);
+        },
         /** Hear an event the module sends (`web.send` on the server); returns how to stop. */
         on(event, run) {
             tick(record);
@@ -1746,8 +1773,8 @@ export function browserModuleState(module) {
 // ─── Where they show ─────────────────────────────────────────────────────────
 
 /**
- * The rail's buttons that extensions added, after the app's own tools: a group that scrolls when they are many, so the
- * folded rail's sessions keep their room.
+ * The rail's buttons that extensions added, after the app's own tools. They take the room they need: a rail with more
+ * buttons than room scrolls as a whole, and fades the edge where more is (`useScrollMore`).
  */
 export function ExtensionRailButtons() {
     const buttons = added("rail");

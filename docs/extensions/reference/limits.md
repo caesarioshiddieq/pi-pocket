@@ -51,7 +51,7 @@ All the numbers that limit a module, in one place. Each group links to the guide
 - **Pages and sheets that a module opens or closes:** past 300 in 1 s, the module stops. With no task between them, it stops past 1000, or at 5 or more over more than 1 s.
 - **Redraws in a hidden tab:** by a timer of 100 ms, which the browser can make slower.
 - **Notices from `pocket.notify`:** 5 every 5 s for a module, for all its versions together. The app drops the rest.
-- **Rail buttons of modules:** together, the height of 4 buttons. Past that, they scroll.
+- **Rail buttons of modules:** no limit of their own. A rail with more buttons than room scrolls as a whole, and fades the edge where more is. The folded rail keeps up to a third of the window for its sessions first.
 - **A count on a rail button:** a count past 99, and `Infinity`, shows "99+".
 - **Text on a rail button:** past 24 characters, it is cut to 23 characters and "…". A panel's badge is the same.
 - **Text of a status item:** past 40 characters, `text` and `short` are cut to 39 characters and "…".
@@ -95,6 +95,39 @@ All the numbers that limit a module, in one place. Each group links to the guide
 - **The data of one event:** 256 KB of JSON at most.
 - **Events that a version of a module sends:** 100 each second at most, and 1 MB of them. The rest of that second's events are dropped.
 - **A tab that falls behind:** Pi Pocket cuts it off when it is more than 8 MB behind and takes nothing for 30 s. It also cuts off a tab that is more than 128 MB behind. The tab then connects again, with no old events.
+
+## Events, services, and settings
+
+[Events, services, and settings](../services-settings.md)
+
+- **Settings of one module:** 30 at most. A name is up to 40 characters, a label up to 80, a description up to 300, and a text value up to 4096. A choice setting has 1 to 50 choices.
+- **Services:** one for each module.
+- **Events:** each listener gets each event once, after the change is stored; nothing is kept for a listener added later.
+
+## Asking people and hidden values
+
+[People's values and the browser](../people-values.md)
+
+- **An ask's card:** a title of 120 characters, words of 2000, up to 6 fields, and a button of 30 characters. A field's name is up to 40 characters, its label up to 80.
+- **A value typed on a card:** 1 to 4096 characters.
+- **A hidden value:** 4 to 4096 characters, and 2000 values hidden at once in all.
+- **What streams late:** command output holds back up to the longest hidden value's length less one character, until the command ends.
+- **Variables for one command:** 256 KB in all; a name is up to 128 characters. A provider has 5 seconds for one command; past that, it adds nothing.
+- **A snapshot's controls as data:** 500 at most; a select's options, 50.
+
+## Public links
+
+[Public pages](../public-pages.md)
+
+- **How long a link stays open:** more than 0 hours, and 720 hours (30 days) at most.
+- **Uses of one link:** 1 to 1000, or any number until it closes.
+- **Open links of one module:** 200 at most. Links that closed do not count.
+- **A link's `data`:** 4 KB of JSON at most.
+- **A posted form:** 64 KB and 50 fields at most. Its body must arrive in 15 s.
+- **Forms read at the same time:** 16 in all, and 2 to one link. More get "Busy: try again in a moment".
+- **A page that a handler answers with:** 1 MB at most.
+- **Page handlers running at the same time:** 32 in all, and 4 for one link. More get "Busy". A handler has 30 s: after that, its reads and writes are refused, and the page says it could not be shown.
+- **A link that took its last use:** kept 10 minutes, so that a page that refuses the post can give the use back. It answers nothing meanwhile.
 
 ## Commands
 

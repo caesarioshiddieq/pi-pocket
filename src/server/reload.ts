@@ -49,6 +49,7 @@ const ORDER = [
     "subagents.ts",
     "agent-teams.ts",
     "schedules.ts",
+    "background.ts",
     "goals.ts",
     "plan.ts",
     "anthropic-subscription.ts",
@@ -60,6 +61,8 @@ const ORDER = [
     "gallery.ts",
     "usage.ts",
     "session-tags.ts",
+    "ask-someone.ts",
+    "updates.ts",
 ];
 
 /** The built-in modules' names (their files' without `.ts`): a drop-in with one of them is never loaded. */
@@ -74,6 +77,7 @@ const OFF_BY_DEFAULT = new Set([
     "agent-teams.ts",
     "anthropic-subscription.ts",
     "session-tags.ts",
+    "ask-someone.ts",
 ]);
 const TITLES: Record<string, string> = {
     "prompt.ts": "System prompt",
@@ -82,6 +86,7 @@ const TITLES: Record<string, string> = {
     "subagents.ts": "Subagents",
     "agent-teams.ts": "Agent Teams",
     "schedules.ts": "Scheduled messages",
+    "background.ts": "Background tasks",
     "goals.ts": "Done when",
     "plan.ts": "Plan mode",
     "anthropic-subscription.ts": "Claude subscription billing",
@@ -93,6 +98,8 @@ const TITLES: Record<string, string> = {
     "gallery.ts": "Extension gallery",
     "usage.ts": "Usage and quota",
     "session-tags.ts": "Session tags",
+    "ask-someone.ts": "Ask someone",
+    "updates.ts": "Pi Pocket updates",
 };
 
 /**
@@ -114,6 +121,7 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "subagent",
     "team",
     "schedule",
+    "background",
     "codemode",
     "memory",
     "sessions",
@@ -129,6 +137,7 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "repo_watch",
     "session_watch_pr",
     "usage_quota",
+    "ask_someone",
 ]);
 
 /** Pi Pocket's own modules, or the owner's from the drop-in folder. */
@@ -158,9 +167,18 @@ export interface ExtensionInfo {
     }[];
     /**
      * What it adds to the app: its routes (`GET status`), who loads its browser module, when it has one, the widest
-     * access of the two, and its commands (`conversation /name`, `global /name`).
+     * access of the two, its commands (`conversation /name`, `global /name`), and whether it draws pages for anyone with
+     * one of its public links.
      */
-    web?: { routes: string[]; client?: WebAccess; access?: WebAccess; commands?: string[] };
+    web?: {
+        routes: string[];
+        client?: WebAccess;
+        access?: WebAccess;
+        commands?: string[];
+        publicPage?: boolean;
+        service?: boolean;
+        settings?: boolean;
+    };
     /** Why the module is not loaded, when it failed. */
     error?: string;
 }
@@ -849,6 +867,23 @@ export class ExtensionLoader {
         }
     }
 
+    /** While an update moves the checkout, edits load nothing: the restart after it loads the new version. */
+    #paused = false;
+
+    /** Stop or start loading modules again when they change, as `watch` does (`updates.ts`). */
+    pause(paused: boolean): void {
+        this.#paused = paused;
+        this.#webs.pause(paused);
+
+        if (paused) {
+            for (const timer of this.#timers.values()) {
+                clearTimeout(timer);
+            }
+
+            this.#timers.clear();
+        }
+    }
+
     /** Watch both folders and reload a module shortly after it changes. Keeps the old code when the new one fails. */
     watch(): void {
         this.#webs.watch();
@@ -876,6 +911,10 @@ export class ExtensionLoader {
     }
 
     #changed(file: string, directory: string): void {
+        if (this.#paused) {
+            return;
+        }
+
         // A browser module's file, or its folder: tabs load the new version.
         this.#webs.touched(directory, file);
 
