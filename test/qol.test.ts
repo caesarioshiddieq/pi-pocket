@@ -374,7 +374,7 @@ test("undoing a file from Changes puts it back as committed, and Pi is told", as
     );
 });
 
-test("a long first message gets a short written title; a short one is the title", async () => {
+test("every first message gets a short written title", async () => {
     // A model thinking aloud in its reply (#52) gives no title, and its reasoning in tags is left out.
     assert.equal(
         cleanTitle("The user wants me to name a chat session with a title of 3 to 6 words"),
@@ -405,10 +405,47 @@ test("a long first message gets a short written title; a short one is the title"
     const short = await newSession(app, folder);
 
     await say(app, short, "fix the login bug");
-    assert.equal(
-        app.sessions().find((each) => each.id === Number(short))?.title,
-        "fix the login bug",
+    await until(
+        () =>
+            app.sessions().find((each) => each.id === Number(short))?.title ===
+            "Tidy The Release Script",
+        "the written title of a short first message",
     );
+});
+
+test("a written title never replaces a name someone gave the session first", async () => {
+    const tokens = async (id: unknown) =>
+        (await app.harness.snapshot(UsageDoc, id as never, context))?.models["faux/faux-1"]
+            ?.totalTokens ?? 0;
+    const complete = app.models.completeSimple;
+    const waiting: (() => void)[] = [];
+
+    app.models.completeSimple = async function (...args) {
+        const request = args[1] as { messages: { content: { type: string; text?: string }[] }[] };
+        const first = request.messages[0]?.content[0];
+
+        if (first?.type === "text" && first.text?.startsWith(TITLE_PROMPT)) {
+            await new Promise<void>((resolve) => waiting.push(resolve));
+        }
+
+        return complete.apply(app.models, args);
+    } as typeof complete;
+
+    try {
+        const id = await newSession(app, folder);
+
+        await say(app, id, "fix the login bug");
+        await until(() => waiting.length > 0, "the title request");
+        await app.commands.updateSession(id, owner(app), { title: "Login" });
+        const before = await tokens(id);
+
+        waiting.splice(0).forEach((resolve) => resolve());
+        await until(async () => (await tokens(id)) > before, "the title's usage");
+
+        assert.equal(app.sessionMeta(id)?.title, "Login");
+    } finally {
+        app.models.completeSimple = complete;
+    }
 });
 
 test("a reply that is no title leaves the first message's", async () => {

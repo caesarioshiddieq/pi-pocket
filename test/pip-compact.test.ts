@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { FauxResponseStep, Message } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
+import { TITLE_PROMPT } from "../src/server/titles.ts";
 import { type ConversationId, type HookApi, LiveDoc, UsageDoc } from "@earendil-works/pi-durable";
 import { FollowsDoc, PipCompactionDoc } from "../src/server/docs.ts";
 import { PAYLOAD_CLOSE, PAYLOAD_OPEN } from "../src/server/hooks.ts";
@@ -61,6 +62,10 @@ const tool = (name: string, args: Parameters<typeof fauxToolCall>[1]) =>
     fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: "toolUse" });
 
 const route: FauxResponseStep = (request) => {
+    if (lastText(request as never).text.startsWith(TITLE_PROMPT)) {
+        return fauxAssistantMessage([fauxText("Compaction notes")]);
+    }
+
     const messages = (request as { messages: Message[] }).messages;
     const system = JSON.stringify(messages.filter((message) => message.role === "system"));
     const { role, text: written } = lastText(request as never);

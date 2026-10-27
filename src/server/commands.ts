@@ -75,7 +75,7 @@ import {
     userContent,
 } from "./resend.ts";
 import { whyUnanswered } from "./subagent-runs.ts";
-import { wantsTitle, writeTitle } from "./titles.ts";
+import { writeTitle } from "./titles.ts";
 import { describeMoment, describeRepeat, knownZone } from "./when.ts";
 import {
     createWorktree,
@@ -1109,10 +1109,10 @@ export class Commands {
     }
 
     /**
-     * A session just got a message: it moves up the list, and its first message names it. A long first message gets a
-     * short title written for it afterwards (`titles.ts`), and so does a command (`/skill:name`, a prompt template),
-     * whose name says little: written from the command and what it `expanded` to, which says what it asks (a skill's
-     * instructions without the paths of its files, which would pull the title toward a folder's name).
+     * A session just got a message: it moves up the list, and its first message names it, while its own model writes a
+     * short title in its place afterwards (`titles.ts`). A command (`/skill:name`, a prompt template) says little by its
+     * name: its title comes from the command and what it `expanded` to, which says what it asks (a skill's instructions
+     * without the paths of its files, which would pull the title toward a folder's name).
      */
     async #touched(id: ConversationId, text: string, expanded?: string): Promise<void> {
         if (this.#app.sessionMeta(id) === undefined) {
@@ -1135,7 +1135,7 @@ export class Commands {
             }
         }, context);
 
-        if (provisional !== undefined && (expanded !== undefined || wantsTitle(text))) {
+        if (provisional !== undefined) {
             void writeTitle(
                 this.#app,
                 id,

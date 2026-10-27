@@ -1,9 +1,8 @@
 /**
- * Session titles. A session is named after its first message at once; when that message is long, or is a command (a
- * skill or prompt template), the session's own model writes a short title in its place, unless someone
- * renamed the session first. Never another model picked on the side, such as a cheaper one of the same provider: nobody
- * chose that one, and it may cost what nobody agreed to. A reply that is no title (the model thinking aloud, or cut off)
- * leaves the first one. What it costs counts as the session's spend, like Pi's own requests.
+ * Session titles. A session is named after its first message at once; its own model then writes a short title in its
+ * place, unless someone renamed it first. Never another model picked on the side, such as a cheaper one of the same
+ * provider: nobody chose that one, and it may cost what nobody agreed to. A reply that is no title (the model thinking
+ * aloud, or cut off) leaves the first one. What it costs counts as the session's spend, like Pi's own requests.
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Usage } from "@earendil-works/pi-ai";
@@ -15,8 +14,6 @@ import { noWait } from "./limit-gate.ts";
 
 const context = BACKGROUND_CONTEXT;
 
-/** First messages this long or longer get a written title; shorter ones are a title already. */
-const LONG_WORDS = 9;
 const MAX_TITLE = 60;
 /**
  * More words than this is no title but prose, such as a model thinking aloud. The model is asked for 3 to 6 words, but
@@ -37,11 +34,9 @@ const READ_CHARS = 3000;
 export const TITLE_PROMPT =
     "You name chat sessions. Reply with only a title of 3 to 6 words for a session that starts with the message below: plain words, no quotes, no punctuation at the end, in the message's language.";
 
-/** Whether the title a first message gives is worth replacing: it is long, or more than one line. */
-export function wantsTitle(text: string): boolean {
-    const words = text.trim().split(/\s+/).length;
-
-    return words >= LONG_WORDS || text.trim().includes("\n");
+/** Reasoning some servers send at the start of a reply's text, in tags or up to one that ends its line. */
+export function withoutReasoning(text: string): string {
+    return text.replace(REASONING, "").replace(REASONING_END, "");
 }
 
 /**
@@ -50,9 +45,7 @@ export function wantsTitle(text: string): boolean {
  * `<think>` tags (or `<thinking>`, `<reasoning>`) as some servers send it, is left out.
  */
 export function cleanTitle(reply: string): string | undefined {
-    const line = reply
-        .replace(REASONING, "")
-        .replace(REASONING_END, "")
+    const line = withoutReasoning(reply)
         .trim()
         .split("\n")[0]!
         .replace(/^(title|session title)\s*:\s*/i, "")
@@ -67,7 +60,7 @@ export function cleanTitle(reply: string): string | undefined {
 }
 
 /** Add one response's usage to the session's ledger, as Pi Durable does for its own. */
-function addUsage(total: Usage, usage: Usage): void {
+export function addUsage(total: Usage, usage: Usage): void {
     total.input += usage.input;
     total.output += usage.output;
     total.cacheRead += usage.cacheRead;
@@ -77,6 +70,18 @@ function addUsage(total: Usage, usage: Usage): void {
     for (const key of ["input", "output", "cacheRead", "cacheWrite", "total"] as const) {
         total.cost[key] += usage.cost[key];
     }
+}
+
+/**
+ * The conversation's own identity with the provider, as Pi Durable sends with its summaries: some providers (OpenCode
+ * Go) refuse a request without one. A conversation older than that identity gets one, as Pi Durable gives it before
+ * its next request.
+ */
+export async function providerSessionId(app: PocketApp, id: ConversationId): Promise<string> {
+    return (
+        (await app.harness.snapshot(ProviderDoc, id, context))?.sessionId ??
+        (await app.harness.commit(async (tx) => (await tx.doc(ProviderDoc, id)).sessionId, context))
+    );
 }
 
 /**
@@ -107,13 +112,7 @@ export async function writeTitle(
 
         // The conversation's own identity with the provider, as Pi Durable sends with its summaries: some providers
         // (OpenCode Go) refuse a request without one.
-        // A conversation older than that identity gets one, as Pi Durable gives it before its next request.
-        const sessionId =
-            (await app.harness.snapshot(ProviderDoc, id, context))?.sessionId ??
-            (await app.harness.commit(
-                async (tx) => (await tx.doc(ProviderDoc, id)).sessionId,
-                context,
-            ));
+        const sessionId = await providerSessionId(app, id);
         const reply = await app.models.completeSimple(
             model,
             {

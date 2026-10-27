@@ -23,6 +23,7 @@ import type { FauxResponseStep } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { type ConversationId, InboxDoc } from "@earendil-works/pi-durable";
 import { dealtWith } from "../src/server/commands.ts";
+import { TITLE_PROMPT } from "../src/server/titles.ts";
 import { SubagentsDoc } from "../src/server/docs.ts";
 
 /** What the parent does: the subagents it starts, then how many rounds of `sleep` it works through. */
@@ -55,6 +56,10 @@ const route: FauxResponseStep = (request) => {
         }
 
         return fauxAssistantMessage([fauxText(`result of ${subagent}`)]);
+    }
+
+    if (text.startsWith(TITLE_PROMPT)) {
+        return fauxAssistantMessage([fauxText("Subagents")]);
     }
 
     parentCalls++;
