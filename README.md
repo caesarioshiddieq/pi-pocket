@@ -33,6 +33,13 @@ The [feature tour](docs/features.md) covers everything else, from plan mode and 
 Requires Node.js 22.19 or newer. Runs on Linux, macOS, Windows, and Android (Termux); Linux is the most tested. Sign in to a provider with Pi first (`pi`, then `/login`), or later from the app's Providers sheet.
 
 ```bash
+npm install -g pi-pocket
+pi-pocket
+```
+
+Or try it with `npx pi-pocket`. To change Pi Pocket's code, or to update it from the app, run a git checkout instead:
+
+```bash
 git clone https://github.com/TannerMidd/pi-pocket.git
 cd pi-pocket
 npm install
@@ -43,7 +50,7 @@ The launcher asks how your devices should connect, then prints a sign-in link an
 
 While it runs: **q** quit · **r** restart server · **a** change access · **o** open in browser · **s** show QR code.
 
-**Updating:** Menu → **Update Pi Pocket** updates a git checkout run with `npm start` and restarts, and goes back by itself if the new version does not start ([features](docs/features.md)). By hand: stop the server, back up `~/.pi-pocket`, pull, run `npm install`, and start again. Read the [release notes](https://github.com/TannerMidd/pi-pocket/releases) first: 0.21.0 upgrades the database one way, so going back needs the backup.
+**Updating:** Menu → **Update Pi Pocket** updates a git checkout run with `npm start` and restarts, and goes back by itself if the new version does not start ([features](docs/features.md)). By hand: stop the server, back up `~/.pi-pocket`, pull, run `npm install`, and start again. An npm install updates with `npm install -g pi-pocket@latest`. Read the [release notes](https://github.com/TannerMidd/pi-pocket/releases) first: 0.21.0 upgrades the database one way, so going back needs the backup.
 
 ### Other ways to run it
 
