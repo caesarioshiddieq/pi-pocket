@@ -74,6 +74,7 @@ type Internal =
     | "goals"
     | "browsers"
     | "memory"
+    | "sessionTags"
     | "usage";
 
 type PublicHost = Pick<PocketHost, keyof Host>;

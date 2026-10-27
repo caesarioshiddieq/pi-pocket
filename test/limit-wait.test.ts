@@ -2,6 +2,7 @@
 import {
     type App,
     cleanUp,
+    lastText,
     modelTexts,
     newSession,
     openApp,
@@ -18,6 +19,7 @@ import { after, test } from "node:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
 import type { ConversationId } from "@earendil-works/pi-durable";
 import type { LimitTuning } from "../src/server/limit-gate.ts";
+import { TITLE_PROMPT } from "../src/server/titles.ts";
 
 const TUNING: Partial<LimitTuning> = { minWaitMs: 50, backoffMs: [60_000] };
 const OVERLOADED = "529 overloaded_error";
@@ -26,7 +28,11 @@ const apps: App[] = [];
 /** The model throws `state.text` while `state.limited`; `calls` counts the requests that reached it. */
 function limited(text = OVERLOADED) {
     const state = { limited: true, text, calls: 0 };
-    const model = scriptedModel(() => {
+    const model = scriptedModel((request) => {
+        if (lastText(request as never).text.startsWith(TITLE_PROMPT)) {
+            return fauxAssistantMessage([fauxText("A Title")]);
+        }
+
         state.calls++;
 
         if (state.limited) {

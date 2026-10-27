@@ -307,6 +307,12 @@ export interface AppEvents {
      */
     "session.archived": { conversationId: number; archived: boolean };
     /**
+     * A session's automatic tags were written, for the first time.
+     * @since 0.25.0
+     * @experimental
+     */
+    "session.tagged": { conversationId: number; tags: readonly string[] };
+    /**
      * A person sent Pi a message: its words as stored, attachments left out. `via` names what sent it for them.
      * @since 0.22.0
      * @experimental
