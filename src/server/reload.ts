@@ -63,6 +63,7 @@ const ORDER = [
     "session-tags.ts",
     "ask-someone.ts",
     "updates.ts",
+    "design.ts",
 ];
 
 /** The built-in modules' names (their files' without `.ts`): a drop-in with one of them is never loaded. */
@@ -100,6 +101,7 @@ const TITLES: Record<string, string> = {
     "session-tags.ts": "Session tags",
     "ask-someone.ts": "Ask someone",
     "updates.ts": "Pi Pocket updates",
+    "design.ts": "Design",
 };
 
 /**
@@ -138,6 +140,9 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "session_watch_pr",
     "usage_quota",
     "ask_someone",
+    "design_preview",
+    "design_export",
+    "design_system",
 ]);
 
 /** Pi Pocket's own modules, or the owner's from the drop-in folder. */
