@@ -314,14 +314,15 @@ export class LinkedSessions implements LinkedSessionsApi {
         return {
             start: (request, key) => this.#start(source, request, key, actor),
             list: async () => {
-                const peers = this.#family(source, actor.current()).filter(
+                const family = this.#family(source, actor.current()).filter(
                     (each) => each.id !== Number(source),
                 );
                 const addresses = await this.#addresses(
                     source,
-                    peers.map((each) => each.id),
+                    family.map((each) => each.id),
                     actor,
                 );
+                const peers = family.filter((each) => !each.hidden);
                 const user = actor.current();
                 const audience = this.#app.config.users.filter((each) =>
                     this.#app.canSee(each, source),
@@ -416,16 +417,21 @@ export class LinkedSessions implements LinkedSessionsApi {
         return (await this.#addresses(source, [target], actor)).get(target)!;
     }
 
-    /** Only visible sessions connect a family. Names show only when the source's whole audience sees them. */
+    /**
+     * The sessions linked here, for the people in the source. A hidden one connects the family but is not listed; names
+     * show only when the source's whole audience sees them.
+     */
     async list(source: ConversationId): Promise<LinkedSession[]> {
         const app = this.#app;
-        const peers = this.#family(source, this.#person(source)).filter(
+        const family = this.#family(source, this.#person(source)).filter(
             (each) => each.id !== Number(source),
         );
+        // The addresses are saved for the whole family, so a hidden session stays reachable by the one it is known by.
+        const peers = family.filter((each) => !each.hidden);
         const audience = app.config.users.filter((user) => app.canSee(user, source));
         const addresses = await this.#addresses(
             source,
-            peers.map((each) => each.id),
+            family.map((each) => each.id),
         );
 
         return peers.map((each) => {
@@ -443,7 +449,8 @@ export class LinkedSessions implements LinkedSessionsApi {
     }
 
     #family(source: ConversationId, user: User) {
-        const sessions = this.#app.sessions(user);
+        // Hidden sessions connect a family: a hidden one, or one whose parent is hidden, is still reachable.
+        const sessions = this.#app.sessions(user, { includeHidden: true });
         const found = new Set([Number(source)]);
         let changed = true;
 
@@ -472,6 +479,7 @@ export class LinkedSessions implements LinkedSessionsApi {
                 cwd: each.cwd,
                 busy: each.busy,
                 archived: each.archived === true,
+                hidden: each.hidden === true,
             }));
     }
 

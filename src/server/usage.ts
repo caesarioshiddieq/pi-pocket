@@ -427,7 +427,7 @@ export class Usage {
                 cost,
                 calls,
                 sessions: this.#app
-                    .sessions(user)
+                    .sessions(user, { includeHidden: true })
                     .filter((session) => (session.updatedAt ?? 0) >= sessionCutoff).length,
             },
             models: models.sort((a, b) => weight(b) - weight(a)),

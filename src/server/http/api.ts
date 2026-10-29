@@ -83,7 +83,10 @@ export function createApi(options: HttpOptions, auth: Auth) {
 
         const session = conversationId(String(body.session));
 
-        if (!app.sessions(user).some((each) => each.id === Number(session))) {
+        // An invite may name a hidden session: it is not listed, and the owner may still invite someone to it.
+        if (
+            !app.sessions(user, { includeHidden: true }).some((each) => each.id === Number(session))
+        ) {
             throw new HttpError(400, "No such session");
         }
 
@@ -505,7 +508,9 @@ export function createApi(options: HttpOptions, auth: Auth) {
         }
 
         if (first === "sessions" && second !== undefined && method === "POST") {
-            const body = await readJson<{ title?: string; archived?: boolean }>(request);
+            const body = await readJson<{ title?: string; archived?: boolean; hidden?: boolean }>(
+                request,
+            );
 
             await app.commands.updateSession(conversationId(second), user, body);
 

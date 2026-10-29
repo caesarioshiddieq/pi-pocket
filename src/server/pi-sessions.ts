@@ -423,8 +423,8 @@ export class PiSessions {
     #continued(): Map<string, { id: number; count: number }> {
         const found = new Map<string, { id: number; count: number }>();
 
-        // Newest first: the first one seen of each is the one to open.
-        for (const session of this.#app.sessions()) {
+        // Newest first: the first one seen of each is the one to open. Hidden ones count: they are still continued.
+        for (const session of this.#app.sessions(undefined, { includeHidden: true })) {
             const from = this.#app.sessionMeta(session.id as unknown as ConversationId)?.fromPi;
 
             if (from !== undefined && !found.has(from.session)) {

@@ -136,6 +136,56 @@ export async function setArchived(ids, archived, { undo = true } = {}) {
 }
 
 /**
+ * Whether this server stores hidden sessions, as its hello says. Web files reload at once and core server files wait
+ * for a restart: an older server ignores the field and answers 200, so a change waits for the capability.
+ */
+export function sessionHidingAvailable() {
+    return store.state.server?.sessionHiding === true;
+}
+
+/**
+ * Hide a session from every session list, or show it there again, then say so in a notice that undoes it. Its archive
+ * status, its history, and a direct link to it stay as they are.
+ */
+export async function setHidden(id, hidden, { undo = true } = {}) {
+    if (!sessionHidingAvailable()) {
+        notify(
+            "error",
+            "Hiding or showing a session needs a server restart. Restart it, then try again.",
+        );
+
+        return;
+    }
+
+    const title =
+        store.state.sessions.find((session) => session.id === id)?.title ??
+        (store.state.view.conversation?.id === id
+            ? store.state.view.conversation.title
+            : undefined) ??
+        "New session";
+
+    try {
+        await actions.updateSession(id, { hidden });
+    } catch (error) {
+        notify("error", error?.message ?? String(error));
+
+        return;
+    }
+
+    if (!undo) {
+        return;
+    }
+
+    const what = `“${title.length > 48 ? `${title.slice(0, 47)}…` : title}”`;
+
+    notify(
+        "info",
+        `${hidden ? "Hidden" : "Shown"} ${what}. ${matchMedia("(pointer: coarse)").matches ? "Tap" : "Click"} to undo.`,
+        () => setHidden(id, !hidden, { undo: false }),
+    );
+}
+
+/**
  * Mark sessions as on their way into the archive (true) or out of it (false). The store drops a mark once the list
  * shows the session where it was going; should that never happen (someone moved it straight back, or the request
  * hangs), the mark goes after a while anyway.

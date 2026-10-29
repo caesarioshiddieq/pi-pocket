@@ -397,3 +397,19 @@ test("a tool result without its call: Pi would send it, providers refuse it, Pi 
     assert.ok(piContext(path).some((message) => message.role === "toolResult"));
     assert.deepEqual(await pocketContext(id), without);
 });
+
+test("a continued session stays marked in Pi's list while it is hidden", async () => {
+    const path = save(rich(), "hidden-continued");
+    const { id } = await app.commands.continuePiSession(owner(app), path);
+    const marked = async () =>
+        (await app.piSessions.list(owner(app))).sessions.find((each) => each.path === path)?.pocket;
+
+    assert.equal((await marked())?.id, Number(id), "continued here, as the list says");
+    await app.commands.updateSession(id, owner(app), { hidden: true });
+    assert.equal(
+        (await marked())?.id,
+        Number(id),
+        "the mark stays while the Pocket session is out of the lists",
+    );
+    await app.commands.updateSession(id, owner(app), { hidden: false });
+});

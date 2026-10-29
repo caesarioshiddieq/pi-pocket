@@ -80,10 +80,13 @@ test("switching waits for git's say, a good name, and the right person", async (
     const id = await newSession(app, repo);
     const me = owner(app);
 
+    // Git words this refusal in two ways, by its version: "already checked out at" (Git 2.39.5 here) or "already used
+    // by worktree". Both are the same 409, and the branch stays where it was.
     await assert.rejects(app.workspace.switchBranch(id, me, { name: "in-a-worktree" }), {
         status: 409,
-        message: /already used by worktree/,
+        message: /already (?:used by worktree|checked out at)/,
     });
+    assert.equal(git(repo, "branch", "--show-current"), "main");
     await assert.rejects(app.workspace.switchBranch(id, me, { name: "--force" }), { status: 400 });
     // What is to be followed must be a remote branch, never an option for git.
     await assert.rejects(

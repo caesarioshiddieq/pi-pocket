@@ -48,13 +48,19 @@ export default function createSessionTags(host: PocketHost, web?: ExtensionWeb) 
         return [...out];
     };
 
-    /** The sessions this person can see, by id. */
-    const visible = (request: WebRequest): Set<number> => {
+    /**
+     * The sessions this person can see, by id. Hidden ones are out of the listing the routes give back, and a write on
+     * one the browser names still goes through: what it changes is that session's own tags.
+     */
+    const visible = (
+        request: WebRequest,
+        options: { includeHidden?: boolean } = {},
+    ): Set<number> => {
         if (typeof request.sessions !== "function") {
             throw appWeb.error(503, "Session tags needs a server restart before it can be used.");
         }
 
-        return new Set(request.sessions().map((session) => session.id));
+        return new Set(request.sessions(options).map((session) => session.id));
     };
 
     // The tags of the sessions this person can see.
@@ -99,7 +105,8 @@ export default function createSessionTags(host: PocketHost, web?: ExtensionWeb) 
                 throw appWeb.error(400, "A tag cannot be added and removed at once.");
             }
 
-            const shown = visible(request);
+            // A tag write on a hidden session is still a write on a session this person may steer.
+            const shown = visible(request, { includeHidden: true });
 
             if (!ids.every((id) => shown.has(id))) {
                 throw appWeb.error(404, "A session to tag is not there anymore.");

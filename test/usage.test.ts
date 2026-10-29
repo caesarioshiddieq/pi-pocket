@@ -589,3 +589,22 @@ test("a flush the ledger refuses counts nothing, and the next counts each entry 
     );
     void entryId;
 });
+
+test("a hidden session still counts among the window's sessions, as its calls and cost do", async () => {
+    const id = await newSession(app);
+    const other = await newSession(app);
+
+    await append(id, digest(Date.now(), 10, 10, 0.25));
+    await append(other, digest(Date.now(), 10, 10, 0.25));
+    await flushWait();
+    const before = windowOf(await summary(), "24h").cards;
+
+    await app.commands.updateSession(id, owner(app), { hidden: true });
+    const after = windowOf(await summary(), "24h").cards;
+
+    assert.ok(before.sessions >= 2, "both sessions count before hiding");
+    assert.equal(after.sessions, before.sessions, "hiding changes no count");
+    assert.equal(after.calls, before.calls);
+    assert.equal(after.cost, before.cost);
+    await app.commands.updateSession(id, owner(app), { hidden: false });
+});

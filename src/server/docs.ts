@@ -34,6 +34,8 @@ export type SessionMeta = {
     updatedAt: number;
     createdBy?: string;
     archived?: boolean;
+    /** Out of every session list; a direct link still opens it, and nobody loses access to it (`updateSession`). */
+    hidden?: boolean;
     /** The session this one was forked from, and the last entry it inherited; no entry: forked before the first message. */
     forkedFrom?: { id: number; entryId?: number };
     /** The session that started this one (`linked-sessions.ts`): a link only, which gives no access and owns nothing. */

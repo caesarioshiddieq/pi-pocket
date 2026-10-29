@@ -240,7 +240,7 @@ interface WebRequest {
     readonly snapshot: DocumentReader["snapshot"];
     readonly context: Context;
     commit<T>(change: (tx: Tx) => T | Promise<T>): Promise<T>;
-    sessions(): readonly WebSession[];
+    sessions(options?: { includeHidden?: boolean }): readonly WebSession[];
 }
 ```
 
@@ -258,6 +258,8 @@ What a handler gets.
 - Document operations recheck the current person. Retaining a request, its context, or a callback does not extend its lifetime: commits after disconnect or handler return are refused, and an unfinished callback rolls back. Await all writes before returning. These APIs are for module documents, not core's internal documents or a way to start model work.
 - An unbound catalog save has no source plan, turn, or spend checks. A bound commit also requires the source's current steering and turn rights.
 - Since 0.20.0 (experimental), `sessions()` gives the sessions that the person who asked can see now, as their session list shows them, archived ones too. See [`WebSession`](#websession). Use it to check the ids that a browser sends, and to keep data about sessions from people who cannot see them. Each call reads the list again.
+- Without an argument, a session that a person hid stays out. A listing that a person reads, such as a route's GET, keeps that default, so the hidden session stays out of it.
+- `sessions({ includeHidden: true })` gives the same sessions, with the hidden ones. Use it only to check an id that the browser already holds, when the route writes to that named session, such as saving its tags. The access check does not change: a hidden session is still admitted only for a person who can see it, and hiding never gives anyone access.
 
 ### `WebSession`
 

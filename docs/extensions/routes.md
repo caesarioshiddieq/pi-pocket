@@ -32,7 +32,7 @@ web.route("GET", "items/:id", ({ params }) => {
 - `body`: the JSON object that the browser sent. It is empty for `GET` and `DELETE`.
 - `user`: who asked, as `{ id, name, role }`.
 - `signal`: aborted when the browser stops waiting. Normal handler return does not abort this signal.
-- Since 0.20.0 (experimental), `sessions()`: the sessions that this person can see now, as their session list shows them (`{ id, title, cwd, archived, updatedAt }`). Check the session ids that a browser sends against it, and leave out data about sessions that the person cannot see.
+- Since 0.20.0 (experimental), `sessions()`: the sessions that this person can see now, as their session list shows them (`{ id, title, cwd, archived, updatedAt }`). A session a person hid stays out of it. Check the session ids that a browser sends against it, and leave out data about sessions that the person cannot see. A route that writes to the named session, such as saving its tags, asks `sessions({ includeHidden: true })`: it holds the same sessions, with the hidden ones, so an id the browser still holds is not refused; a listing that a person reads keeps the default.
 - Since 0.16.0, `snapshot` and `context` read fresh module documents. Unlike `signal`, `context.abortSignal` is cancelled on disconnect or handler return, ending the new document and linked-session capabilities. `commit(change)` writes them atomically and returns the callback's answer. It refuses viewers, and callbacks that finish after the request ends roll back. Await writes before returning; do not keep request capabilities in timers. Follow the `x.<module>.…` document naming rule. These are not APIs for changing core documents.
 
 What the handler returns goes back as JSON. `undefined` goes back as `{}`.

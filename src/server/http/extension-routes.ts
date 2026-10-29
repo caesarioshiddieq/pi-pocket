@@ -124,8 +124,9 @@ export async function extensionRoute(
             snapshot: scope.snapshot,
             commit: scope.commit,
             // Read when the handler asks, as the person is then: a copy, so the handler cannot change the list.
-            sessions: (): WebSession[] =>
-                app.sessions(scope.current()).map((session) => ({
+            // Hidden sessions stay out unless the handler asks for them, as a check of an id it was given does.
+            sessions: ({ includeHidden = false }: { includeHidden?: boolean } = {}): WebSession[] =>
+                app.sessions(scope.current(), { includeHidden }).map((session) => ({
                     id: session.id,
                     title: session.title ?? "New session",
                     cwd: session.cwd,

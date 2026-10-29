@@ -1,6 +1,6 @@
 // A session's actions from its row in the session list, for touch screens, which cannot hover to show them.
 import { sessionActions } from "../extension-ui.js";
-import { selectFromList, setArchived } from "../sessions.js";
+import { selectFromList, setArchived, sessionHidingAvailable, setHidden } from "../sessions.js";
 import { canSteer, closeSheet, isUnread, setUnread, store } from "../store.js";
 import { isPinned, togglePin } from "../theme.js";
 import { html, item, Sheet } from "../ui.js";
@@ -41,6 +41,14 @@ export function SessionSheet({ id }) {
             item(
                 session.archived ? "Unarchive" : "Archive",
                 then(() => setArchived([id], !session.archived)),
+            )
+        }
+        ${
+            steer &&
+            sessionHidingAvailable() &&
+            item(
+                "Hide from lists",
+                then(() => setHidden(id, true)),
             )
         }
         ${sessionActions().map((action) =>
