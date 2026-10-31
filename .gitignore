@@ -1,4 +1,7 @@
+# deps: the trailing-slash form only matches a real dir, so the bare form also
+# catches a stray node_modules symlink (seen 2026-10-31, broke the service).
 node_modules/
+node_modules
 # What an update from the app keeps while it works (src/server/update-state.ts).
 /.pocket-update/
 *.log
