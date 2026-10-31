@@ -61,9 +61,11 @@ const ORDER = [
     "gallery.ts",
     "usage.ts",
     "session-tags.ts",
+    "ask.ts",
     "ask-someone.ts",
     "updates.ts",
     "design.ts",
+    "tool-search.ts",
 ];
 
 /** The built-in modules' names (their files' without `.ts`): a drop-in with one of them is never loaded. */
@@ -99,9 +101,11 @@ const TITLES: Record<string, string> = {
     "gallery.ts": "Extension gallery",
     "usage.ts": "Usage and quota",
     "session-tags.ts": "Session tags",
+    "ask.ts": "Ask",
     "ask-someone.ts": "Ask someone",
     "updates.ts": "Pi Pocket updates",
     "design.ts": "Design",
+    "tool-search.ts": "Tool search",
 };
 
 /**
@@ -125,6 +129,7 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "schedule",
     "background",
     "codemode",
+    "tool_search",
     "memory",
     "sessions",
     "session_read",
@@ -139,6 +144,7 @@ export const BUILT_IN_TOOLS: ReadonlySet<string> = new Set([
     "repo_watch",
     "session_watch_pr",
     "usage_quota",
+    "ask",
     "ask_someone",
     "design_preview",
     "design_export",
