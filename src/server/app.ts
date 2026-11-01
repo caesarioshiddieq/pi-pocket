@@ -2279,9 +2279,6 @@ export class PocketApp {
                 refreshModels: user.role === "owner",
                 // Tells the web app this server sends peek tiles (`POST /api/peeks`, `peek` events).
                 peeks: true,
-                // Tells the web app this server stores hidden sessions and leaves them out of its lists. Web files
-                // reload at once, core server files wait for a restart: without it, the app offers no Hide or Show.
-                sessionHiding: true,
                 // This server's clock: peek tiles compare the browser's looks with when runs ended here.
                 now: Date.now(),
                 // Collaboration features: 2 adds roles, take turns, reactions, pins, notes, mentions, and push.
@@ -2407,12 +2404,8 @@ export class PocketApp {
         return asks;
     }
 
-    /**
-     * The session list, with who is in each session and its newest chat message. Scoped people see only theirs, and
-     * hidden sessions stay out unless `includeHidden` asks for them: only a check that must admit a session the lists
-     * leave out (an invite, a tag, a linked family, a worktree's sharing session, usage, Pi's continuation) asks.
-     */
-    sessions(user?: User, { includeHidden = false }: { includeHidden?: boolean } = {}) {
+    /** The session list, with who is in each session and its newest chat message. Scoped people see only theirs. */
+    sessions(user?: User) {
         const waiting = new Set(
             this.approvals.all().map((approval) => String(this.rootOf(approval.conversationId))),
         );
@@ -2445,8 +2438,6 @@ export class PocketApp {
                 ([id, meta]) =>
                     // PiP is not a session people pick: it shows in its own panel (`pip.ts`).
                     meta.pip === undefined &&
-                    // A hidden session is out of every list, and still opens from a direct link (`hidden` in docs.ts).
-                    (includeHidden || meta.hidden !== true) &&
                     (user?.sessions === undefined || user.sessions.includes(id)),
             )
             .map(([id, meta]) => {
@@ -2556,8 +2547,6 @@ export class PocketApp {
                 (meta === undefined ? `Conversation ${String(room.id)}` : "New session"),
             cwd: agent.cwd ?? meta?.cwd ?? this.defaultCwd,
             archived: meta?.archived === true,
-            // Hiding takes a session out of the lists; its own view still says it is hidden, so the menu can show it.
-            hidden: meta?.hidden === true,
             // PiP's own conversation, opened as a page: some session things (a PR to watch) are not for it.
             ...(meta?.pip === undefined ? {} : { pip: true }),
             ...(room.parent === undefined ? {} : { parent: room.parent }),

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { sessionActions } from "../extension-ui.js";
-import { deselectInList, selectedInList, selectFromList, sessionHidingAvailable, setArchived, setHidden } from "../sessions.js";
+import { deselectInList, selectedInList, selectFromList, setArchived } from "../sessions.js";
 import {
     actions,
     attempt,
@@ -123,11 +123,6 @@ function sessionItems(session) {
                 label: session.archived ? "Unarchive" : "Archive",
                 run: () => setArchived([id], !session.archived),
             },
-            steer &&
-                sessionHidingAvailable() && {
-                    label: "Hide from lists",
-                    run: () => setHidden(id, true),
-                },
         ],
     ]
         .map((group) => group.filter(Boolean))

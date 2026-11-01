@@ -213,16 +213,6 @@ test("a worktree another session works in stays, and a session's subagents leave
         status: 409,
         message: /works in this worktree too/,
     });
-
-    // Hidden or not, a session that works there keeps the folder.
-    await app.commands.updateSession(fork, owner(app), { hidden: true });
-    await assert.rejects(app.commands.removeWorktree(id, owner(app), true), {
-        status: 409,
-        message: /works in this worktree too/,
-    });
-    assert.ok(existsSync(worktree.path), "the worktree stays while a hidden session works in it");
-    await app.commands.updateSession(fork, owner(app), { hidden: false });
-
     await app.commands.configure(fork, owner(app), { cwd: join(repo, "app") });
 
     await app.commands.removeWorktree(id, owner(app), true);

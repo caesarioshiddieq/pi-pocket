@@ -559,9 +559,9 @@ export class Commands {
             throw new HttpError(409, "Pi is working in the worktree: stop it first.");
         }
 
-        // A fork made without a worktree of its own works in this one. A hidden session counts too: its folder moves.
+        // A fork made without a worktree of its own works in this one.
         const sharing = app
-            .sessions(undefined, { includeHidden: true })
+            .sessions()
             .find(
                 (session) =>
                     session.id !== Number(id) &&
@@ -688,7 +688,7 @@ export class Commands {
     async updateSession(
         id: ConversationId,
         user: User,
-        patch: { title?: string; archived?: boolean; hidden?: boolean },
+        patch: { title?: string; archived?: boolean },
     ): Promise<void> {
         const app = this.#app;
 
@@ -698,10 +698,6 @@ export class Commands {
 
         if (patch.archived !== undefined && typeof patch.archived !== "boolean") {
             throw new HttpError(400, "archived must be true or false");
-        }
-
-        if (patch.hidden !== undefined && typeof patch.hidden !== "boolean") {
-            throw new HttpError(400, "hidden must be true or false");
         }
 
         const before = app.sessionMeta(id);
@@ -722,11 +718,6 @@ export class Commands {
 
             if (patch.archived !== undefined) {
                 meta.archived = patch.archived;
-            }
-
-            // A hidden session keeps its archive status, its history, and a direct link to it: only the lists drop it.
-            if (patch.hidden !== undefined) {
-                meta.hidden = patch.hidden;
             }
         }, context);
         const title = patch.title === undefined ? undefined : oneLine(patch.title);

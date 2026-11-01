@@ -1019,13 +1019,11 @@ export interface WebRequest {
      */
     commit<T>(change: (tx: Tx) => T | Promise<T>): Promise<T>;
     /**
-     * The sessions that the person who asked can see now, as their session list shows them, archived ones too. A
-     * session a person hid is left out; with `{ includeHidden: true }`, the check of an id that a browser sent may
-     * admit it, and no access check changes.
+     * The sessions that the person who asked can see now, as their session list shows them, archived ones too.
      * @since 0.20.0
      * @experimental
      */
-    sessions(options?: { includeHidden?: boolean }): readonly WebSession[];
+    sessions(): readonly WebSession[];
 }
 
 /**

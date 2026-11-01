@@ -578,11 +578,8 @@ export interface WebRequest {
     readonly context: Context;
     /** Change the module's documents; refused for viewers and after this request ends. */
     commit<T>(change: (tx: Tx) => T | Promise<T>): Promise<T>;
-    /**
-     * The sessions the person who asked can see now, as their session list shows them (archived ones too). Hidden
-     * ones stay out; a check of an id a browser sent may ask for them with `{ includeHidden: true }`.
-     */
-    sessions(options?: { includeHidden?: boolean }): readonly WebSession[];
+    /** The sessions the person who asked can see now, as their session list shows them (archived ones too). */
+    sessions(): readonly WebSession[];
 }
 
 /** A session in a person's session list, as `WebRequest.sessions` gives it. */

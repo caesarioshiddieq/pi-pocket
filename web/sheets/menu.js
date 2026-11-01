@@ -9,7 +9,7 @@ import { filesAvailable, setFilesOpen } from "../files-panel.js";
 import { peeksOn, togglePeeks } from "../peeks.js";
 import { modelRefreshAvailable, refreshModels } from "../model-refresh.js";
 import { openPip, pipAvailable, pipUnread } from "../pip.js";
-import { sessionHidingAvailable, setArchived, setHidden } from "../sessions.js";
+import { setArchived } from "../sessions.js";
 import { openSubagent } from "../subagents.js";
 import {
     actions,
@@ -520,15 +520,6 @@ export function MenuSheet({ places = true }) {
                 item(conversation.archived ? "Unarchive" : "Archive", () => {
                     closeSheet();
                     setArchived([conversation.id], !conversation.archived);
-                })
-            }
-            ${
-                session &&
-                steer &&
-                sessionHidingAvailable() &&
-                item(conversation.hidden ? "Show in lists" : "Hide from lists", () => {
-                    closeSheet();
-                    setHidden(conversation.id, !conversation.hidden);
                 })
             }
         </div>
