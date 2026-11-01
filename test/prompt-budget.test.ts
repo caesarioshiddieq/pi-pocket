@@ -4,7 +4,9 @@ import { test } from "node:test";
 import { fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
 
 /** About 4,000 tokens. Raise it only on purpose, in the pull request that needs more. */
-const LIMIT = 16_000;
+// This fork carries one more tool than upstream (usage_quota, 389 characters). Raised by 400 on purpose,
+// 2026-11-01; remove the raise when usage becomes a drop-in that tool-search can defer.
+const LIMIT = 16_400;
 /** Pi's own tools, and the owner's AGENTS.md and skills: not Pi Pocket's to count. */
 const NOT_OURS = new Set(["read", "bash", "edit", "write", "project_context", "skills"]);
 
@@ -15,7 +17,12 @@ test("a new session's sections and tool schemas fit the prompt budget", async ()
     let first: { messages: System[] } | undefined;
     const app = await openApp(
         scriptedModel((request) => {
-            first ??= request as never;
+            // The fork names a session with its model before the first request; that request has no sections.
+            // Count the session's own first request, which is what this budget is about.
+            const carried = request as { messages?: { sections?: Record<string, string> }[] };
+            if (first === undefined && Object.keys(carried.messages?.[0]?.sections ?? {}).length > 0) {
+                first = request as never;
+            }
 
             return fauxAssistantMessage([fauxText("ok")]);
         }),

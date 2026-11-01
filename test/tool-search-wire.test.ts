@@ -154,10 +154,14 @@ async function requests(modelId: string) {
         await (await app.harness.submission(submissionId, context))!.wait(context);
     }
 
-    return bodies.map((body) => ({
-        tools: (body.tools ?? []).map((tool) => tool.name),
-        additions: JSON.stringify(body.messages).match(/tool_addition/g)?.length ?? 0,
-    }));
+    // This fork asks the session's model to name the session before its first request; upstream does not,
+    // and that title request carries no tools. It is not part of what this test measures.
+    return bodies
+        .filter((body) => !JSON.stringify(body.messages).includes("You name chat sessions"))
+        .map((body) => ({
+            tools: (body.tools ?? []).map((tool) => tool.name),
+            additions: JSON.stringify(body.messages).match(/tool_addition/g)?.length ?? 0,
+        }));
 }
 
 test("on a model with mid-conversation tool changes, a load leaves the tool list as it was", async () => {
