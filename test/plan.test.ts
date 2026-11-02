@@ -24,7 +24,7 @@ import { PlanDoc, SubagentsDoc } from "../src/server/docs.ts";
 import { blockedInPlanMode, commandWords, readOnlyCommand } from "../src/server/extensions/plan.ts";
 
 test("anything beyond plain words in a command line is refused", () => {
-    for (const refused of ["ls > out", 'echo "$(id)"', "echo `id`", "ls *.ts", "ls &"]) {
+    for (const refused of ["ls > out", 'echo "$(id)"', "echo `id`", "ls &", "./*.sh"]) {
         const words = commandWords(refused);
 
         assert.ok(words === undefined || !readOnlyCommand(refused), refused);
@@ -39,6 +39,23 @@ test("only commands that read pass, with arguments that keep them reading", () =
         "find . -name '*.ts' -not -path './node_modules/*'",
         "git status",
         "rg --glob '*.md' pi",
+        // Redirections that discard or copy a stream change nothing on disk.
+        "grep -n TODO src/app.ts 2>/dev/null",
+        "ls -la src 2>&1 | head -20",
+        "cat package.json >/dev/null",
+        // A line range, `hash-object` without `-w`: the two writes a reader cannot see are refused below.
+        "sed -n '1,120p' docs/extensions.md",
+        "git hash-object src/app.ts",
+        // A glob may fill an option value: the option keeps its name, so no reader gains an option that writes.
+        "grep -rn TODO src --include=*.ts 2>/dev/null",
+        "rg --glob=*.md pi",
+        "sed -n '1,20p' docs/extensions.md",
+        "echo x >&1 | head -2",
+        "echo x >>/dev/null",
+        "echo x 3>&2",
+        "cat </dev/null",
+        "uniq f",
+        "diff -u a b",
     ];
 
     for (const command of reads) {
@@ -60,6 +77,49 @@ test("only commands that read pass, with arguments that keep them reading", () =
         // The subscript of a name runs what it substitutes.
         "printf -v 'a[$(touch pwned)]' x",
         "sed -i s/a/b/ f",
+        // `sed` passes only as a range print: `-i`, a `w` command, or any other script writes.
+        "sed 's/a/b/' f",
+        "sed -n 'w out' f",
+        "sed -n '1,2w out' f",
+        // `hash-object -w` writes the object it just made.
+        "git hash-object -w f",
+        // Only the discarding redirections pass: a named file is not it.
+        "ls > out 2>&1",
+        "cat f 2>/tmp/err",
+        // A glob in the command position runs what it matches: it is not a reader.
+        "*.sh",
+        // After `--` every word is a file name, so an option-shaped word there is a name `uniq` would write.
+        "echo data | uniq -- - --include=out",
+        "echo data | uniq -- - '--include=*'",
+        // `diff -l` starts `pr` to paginate.
+        "diff -l /dev/null /etc/hosts",
+        // `sed` passes only with `-n`, so it never prints the whole file as well as the range.
+        "sed 1p file",
+        // A bare glob names files this reader cannot see: one may start with `-` and become an option.
+        "ls *.ts",
+        "cat docs/*.md | head -5",
+        "sed -n '1p' ?i f",
+        "git hash-object ?w f",
+        "find . -delet?",
+        "uniq f*",
+        // A redirection and the command after it stay apart, and the target is exactly /dev/null.
+        "echo safe\n2>/dev/null touch /tmp/pwned",
+        "echo x >/dev/null.review",
+        'echo x >/dev/null".review"',
+        // `>&1review` names a file, so the descriptor number must end the redirection.
+        "echo x >&1review",
+        // `file -C` compiles a magic file, so a glob may not reach `file`.
+        "file ?C",
+        // `diff -l` starts `pr`, so a glob may not reach `diff` either.
+        "diff ?l a b",
+        // A quoted or escaped digit is a file name the reader sees, not a file descriptor.
+        "uniq '1'>/dev/null out",
+        // A carriage return does not end a redirection in bash, so the target is a file name.
+        "echo x >&1\rreview",
+        // Bash splits a word on a space or a tab only, so `\r`, `\v` and a nonbreaking space stay in the name.
+        "uniq \r1>/dev/null out",
+        "uniq \u000b1>/dev/null out",
+        "uniq \u00a01>/dev/null out",
         "ls && rm x",
         "",
     ];
