@@ -22,7 +22,6 @@ import type { Schedules } from "./schedules.ts";
 import type { BackgroundTasks } from "./background.ts";
 import type { Updates } from "./updates.ts";
 import type { RepoWatches } from "./repo-watches.ts";
-import type { TagChange } from "./session-tags.ts";
 import type { Usage } from "./usage.ts";
 import type { Watches } from "./watches.ts";
 import type { FetchPublic } from "./public-fetch.ts";
@@ -512,14 +511,6 @@ export interface PocketHost {
     readonly repoWatches: Pick<RepoWatches, "task">;
     /** Lessons Pi keeps across sessions (`memory.ts`): the memory tool saves them, and its section lists them. */
     readonly memory: Pick<Memory, "project" | "applying" | "inForce" | "add" | "change">;
-    /**
-     * Sessions' tags: read them, or add and remove them on sessions, all or nothing. Automatic tagging writes them
-     * through core; the Session tags extension's routes show and edit them.
-     */
-    readonly sessionTags: {
-        read(): Promise<Record<string, string[]>>;
-        change(change: TagChange): Promise<Record<string, string[]>>;
-    };
     /**
      * Text from elsewhere made safe for Pi to read (`fence.ts`): `quoted` gives one line, cut to `max`, without
      * invisible characters or any tag, in quotes it cannot close; `defang` keeps the lines, but no closing tag survives,

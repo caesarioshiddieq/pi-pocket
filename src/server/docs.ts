@@ -83,22 +83,6 @@ export const SessionTagsDoc = defineDoc<{ tags: Record<string, string[]> }>({
 });
 
 /**
- * When each session's automatic tags were looked at, and attempts that began but did not finish, by session id. A
- * started attempt is not repeated, also across a restart: the provider may have charged for it, and its answer and
- * usage were lost.
- */
-export const AutoTagsDoc = defineDoc<{
-    tried: Record<string, number>;
-    started: Record<string, number>;
-}>({
-    kind: "pocket.auto-tags",
-    version: 1,
-    ...rebased,
-    scope: "session",
-    initial: () => ({ tried: {}, started: {} }),
-});
-
-/**
  * The addresses this session knows its linked sessions by, so no session id goes into its transcript. A fork starts with
  * none, so it leaves the team: the addresses in the history it inherited do not resolve there.
  */

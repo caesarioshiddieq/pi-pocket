@@ -178,26 +178,6 @@ test("a change is all or nothing, and names and ids are checked", async () => {
     assert.deepEqual(await tagsOf(), before);
 });
 
-test("tags that core writes, as automatic tags are, show and stay beside a person's own", async () => {
-    const auto = await newSession(app);
-
-    // Core writes them, as automatic tagging does; the extension's route reads the same document.
-    await app.sessionTags.change({ ids: [Number(auto)], add: ["deploy"], remove: [] });
-
-    assert.deepEqual((await tagsOf())[String(auto)], ["deploy"]);
-
-    const edited = await call("owner", "/api/x/session-tags/tags", {
-        ids: [Number(auto)],
-        add: ["manual"],
-    });
-
-    assert.equal(edited.status, 200);
-    assert.deepEqual((await tagsOf())[String(auto)], ["deploy", "manual"]);
-
-    // Back to the tags the tests before this one left.
-    await app.sessionTags.change({ ids: [Number(auto)], add: [], remove: ["deploy", "manual"] });
-});
-
 test("taking off a session's last tag leaves no entry, and tags last across a restart", async () => {
     assert.equal(
         (
@@ -215,22 +195,15 @@ test("taking off a session's last tag leaves no entry, and tags last across a re
     assert.deepEqual(await tagsOf(), { [second]: ["bug", "review"] });
 });
 
-test("a server without host.sessionTags, which loads the file as its checkout changes, gets nothing from it", () => {
+test("a server older than 0.20.0, which loads the file as its checkout changes, gets nothing from it", () => {
     const calls: string[] = [];
     const web = new Proxy(
         {},
         { get: (_target, name) => () => void calls.push(String(name)) },
     ) as unknown as ExtensionWeb;
 
-    createSessionTags({ pocketVersion: "0.24.0" } as PocketHost, web);
+    createSessionTags({ pocketVersion: "0.19.0" } as PocketHost, web);
     assert.equal(calls.length, 0);
-    createSessionTags(
-        {
-            pocketVersion: "0.25.0",
-            sessionTags: { read: async () => ({}), change: async () => ({}) },
-            on: () => () => {},
-        } as unknown as PocketHost,
-        web,
-    );
+    createSessionTags({ pocketVersion: "0.20.0" } as PocketHost, web);
     assert.ok(calls.includes("client") && calls.includes("route"));
 });

@@ -115,12 +115,10 @@ import { ResendTask } from "./resend.ts";
 import { type Client, reportingOf, Room, ROOM_DOCS, subagentView } from "./room.ts";
 import { whyUnanswered } from "./subagent-runs.ts";
 import { Schedules } from "./schedules.ts";
-import { SessionTags } from "./session-tags.ts";
 import { BackgroundTasks } from "./background.ts";
 import { Shares } from "./share.ts";
 import { CommandEnvs, HiddenValues, wrapEnv } from "./hidden.ts";
 import { AppEventBus } from "./app-events.ts";
-import { AutoTags } from "./auto-tags.ts";
 import { changeSettings, shownSettings } from "./extension-settings.ts";
 import { ask, browserFor, checkValues } from "./extension-points.ts";
 import { PublicLinks } from "./public-links.ts";
@@ -370,10 +368,6 @@ export class PocketApp {
     readonly memory = new Memory(this);
     /** Each person's favorite working folders, shared by their devices. */
     readonly folderFavorites = new FolderFavorites(this);
-    /** Sessions' tags, which automatic tagging writes and the Session tags extension shows (`session-tags.ts`). */
-    readonly sessionTags = new SessionTags(this);
-    /** Automatic tags after a session's first answer (`auto-tags.ts`). */
-    readonly autoTags = new AutoTags(this);
     /** Artifacts published to anyone with their address (`share.ts`), which needs no sign-in. */
     readonly shares = new Shares(this);
     /** Extension modules' pages for anyone with the address (`public-links.ts`), which need no sign-in. */
@@ -583,14 +577,6 @@ export class PocketApp {
             settings: (module) => this.config.extensionSettings(module),
         });
 
-        // Automatic tags: a session's own run has ended, so its first answer is in the transcript. Before the catalogue is
-        // read back, `sessionMeta` is undefined and nothing is tagged.
-        this.events.on("run.ended", ({ conversationId, session }) => {
-            void this.autoTags.maybeTag(
-                conversationId as ConversationId,
-                session as ConversationId,
-            );
-        });
     }
 
     /**
@@ -858,7 +844,6 @@ export class PocketApp {
             watches: this.watches,
             repoWatches: this.repoWatches,
             memory: this.memory,
-            sessionTags: this.sessionTags,
             usage: this.usage,
             gallery: this.gallery,
             updates: this.updates,

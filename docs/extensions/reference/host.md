@@ -494,7 +494,6 @@ What each event's listener gets.
 
 - `session.created`: a session in the list was made, by a person, a fork (`forkedFrom`), a linked start (`linkedFrom`), or a resend. `createdBy` is a person's id. Subagents are not sessions in the list, and send none.
 - `session.renamed`, `session.archived`: its new title, or whether it is archived now.
-- `session.tagged`: a session's automatic tags were written for the first time, after its first answer. `tags` are the ones that were stored, in the order they are shown.
 - `message.sent`: a person's message to Pi, a steer or a queued one too. `by` is their id. `text` is the words as stored, with values that extensions hide already hidden and attachments left out. `via` names what sent it for them, such as PiP or a schedule.
 - `run.started`, `run.ended`: Pi started or stopped working in a conversation. `conversationId` is that conversation, a session's or a subagent's; `session` is the session it belongs to.
 
@@ -715,7 +714,6 @@ The host has more members, for Pi Pocket's built-in modules only. They are not i
 - `goals`: Done when, for the goals module.
 - `browsers`: the built-in browser, for the browser tool.
 - `memory`: the lessons that Pi keeps across sessions, for the memory tool.
-- `sessionTags`: sessions' tags, for automatic tagging and the Session tags extension's routes: `read()`, and `change({ ids, add, remove })`, all or nothing.
 - `watches`: the pull request watches of sessions, for the `watch_pr` tool.
 - `repoWatches`: the task of repository watches, for the triggers module.
 - `pip`: what the tools of PiP, the owner's assistant, do.
