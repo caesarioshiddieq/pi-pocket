@@ -1,16 +1,46 @@
-// Dictation into a message box, with the browser's own speech recognition (the Web Speech API). Words show in the box
-// as they are heard and stay once the browser settles on them; nothing is ever sent by itself. Chrome sends the audio
-// to Google's servers to be recognised; Safari on iOS has it too; Firefox has none, and there the mic does not show.
+// Dictation into a message box, with two engines. Where the browser has a recogniser of its own (Chrome, Safari) its
+// words show in the box as they are heard, and stay once it settles on them. Where it has none, or cannot reach its own
+// servers (Chromium builds without Google's keys, such as Brave), the clip is recorded instead and the server works out
+// the words. Either way nothing is ever sent by itself. Chrome sends its audio to Google; the server sends it to Groq.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { notify } from "./store.js";
+import { api, dismiss, notify } from "./store.js";
 import { html, Icon } from "./ui.js";
 
 /** The browser's recognizer, looked up when used (so a page can stand one in), or undefined where there is none. */
 const Recognizer = () => globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 
-/** Whether the mic can work here: a recognizer, and a page browsers give the microphone to (https, or this machine). */
+/** Where this browser dictates, kept between visits: `localStorage` holds strings, and nothing else. */
+const MODE_KEY = "pocket.dictation";
+
+/** Whether the server recognises this browser's clips: after its own recogniser failed to reach its servers, or where it
+ * has none at all. */
+const serverMode = () => {
+    try {
+        return localStorage.getItem(MODE_KEY) === "server";
+    } catch {
+        return false;
+    }
+};
+
+const keepMode = (server) => {
+    try {
+        localStorage.setItem(MODE_KEY, server ? "server" : "browser");
+    } catch {
+        // A browser that keeps nothing: the next dictation asks its own recogniser again.
+    }
+};
+
+/** Whether this browser can record a clip for the server: a recorder, a microphone, and a page browsers give it to. */
+const recordable = () =>
+    globalThis.isSecureContext !== false &&
+    typeof MediaRecorder === "function" &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.mediaDevices?.getUserMedia === "function";
+
+/** Whether the mic can work here: a recognizer of the browser's own or a recorder for the server, and a page browsers
+ * give the microphone to (https, or this machine). */
 export const voiceAvailable = () =>
-    globalThis.isSecureContext !== false && typeof Recognizer() === "function";
+    globalThis.isSecureContext !== false && (typeof Recognizer() === "function" || recordable());
 
 /** What each of the recognizer's errors means for the person; those not here are named as they are. */
 const ERRORS = {
@@ -21,6 +51,42 @@ const ERRORS = {
     network: "Dictation needs the network: the browser recognises speech on its own servers.",
     "language-not-supported": "This browser cannot recognise your language.",
 };
+
+/** What this browser records for the server: Opus in WebM where it has it, MP4 (Safari) where it has not. */
+const TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+
+/** What this browser records, the best of what it supports: empty leaves the choice to the browser itself. */
+function recordingType() {
+    const supports = (type) =>
+        typeof MediaRecorder.isTypeSupported !== "function" || MediaRecorder.isTypeSupported(type);
+
+    return TYPES.find(supports) ?? "";
+}
+
+/** The longest clip the server takes: a minute of speech is a paragraph, and the free tier counts every second. */
+const MAX_SECONDS = 120;
+
+/** A press shorter than this is a tap, not a person speaking, and sends no clip. */
+const MIN_SECONDS = 0.4;
+
+/** What a microphone the browser would not open means for the person. */
+function micProblem(error) {
+    const name = error?.name ?? "";
+
+    if (name === "NotAllowedError" || name === "SecurityError") {
+        return ERRORS["not-allowed"];
+    }
+
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+        return ERRORS["audio-capture"];
+    }
+
+    if (name === "NotReadableError") {
+        return "The microphone is busy in another app.";
+    }
+
+    return `The microphone did not open: ${error?.message ?? error}`;
+}
 
 /** The dictation that listens now: one at a time, in the whole app. */
 let current = null;
@@ -102,8 +168,31 @@ export function useDictation(box, onText, { top = false } = {}) {
             box,
             top,
             recognition: null,
+            /** The clip being recorded for the server, while it records. */
+            recorder: null,
+            /** The microphone on its way to opening, before there is a recorder. */
+            opening: false,
+            /** Whether what is being recorded or heard is thrown away rather than used. */
+            dropped: false,
+            /** Held down now, or let go before the microphone opened. */
+            pressed: undefined,
+            /** The timer that stops a clip that nobody stopped. */
+            timer: null,
             /** Stop listening: `drop` throws away what is not settled yet, and anything heard after. */
             stop(drop = false) {
+                const recorder = this.recorder;
+
+                if (recorder) {
+                    // `onstop` sends the clip, or drops it, and lets the microphone go.
+                    this.dropped = drop;
+                    clearTimeout(this.timer);
+                    this.timer = null;
+                    setListening(false);
+                    recorder.stop();
+
+                    return;
+                }
+
                 const recognition = this.recognition;
 
                 if (!recognition) {
@@ -128,7 +217,15 @@ export function useDictation(box, onText, { top = false } = {}) {
                 const element = box.current;
                 const Recognition = Recognizer();
 
-                if (!element || typeof Recognition !== "function") {
+                if (!element || this.opening) {
+                    return;
+                }
+
+                // No recogniser of its own, or one that cannot reach its servers: record the clip, and let the server
+                // work out the words.
+                if (typeof Recognition !== "function" || serverMode()) {
+                    this.record(element);
+
                     return;
                 }
 
@@ -267,11 +364,26 @@ export function useDictation(box, onText, { top = false } = {}) {
 
                 recognition.onerror = (event) => {
                     // Aborted is this app's own doing; no speech for a while ends a quiet dictation, said once.
-                    if (event.error !== "aborted") {
-                        const level = event.error === "no-speech" ? "info" : "error";
-
-                        notify(level, ERRORS[event.error] ?? `Dictation stopped: ${event.error}.`);
+                    if (event.error === "aborted") {
+                        return;
                     }
+
+                    // This recogniser cannot reach its own servers, which a Chromium build without Google's keys
+                    // does every time. The server takes the next clip, and every one after it.
+                    if (event.error === "network" && recordable()) {
+                        keepMode(true);
+                        notify(
+                            "error",
+                            "The browser's dictation has no network. This browser now records the clip " +
+                                "and the server works out the words: hold the mic to talk.",
+                        );
+
+                        return;
+                    }
+
+                    const level = event.error === "no-speech" ? "info" : "error";
+
+                    notify(level, ERRORS[event.error] ?? `Dictation stopped: ${event.error}.`);
                 };
 
                 recognition.onend = () => {
@@ -289,10 +401,161 @@ export function useDictation(box, onText, { top = false } = {}) {
                     notify("error", `Dictation did not start: ${error.message ?? error}`);
                 }
             },
+            /** Record a clip for the server, which works out the words once the person lets go. */
+            async record(element) {
+                let stream;
+
+                this.opening = true;
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                        },
+                    });
+                } catch (error) {
+                    this.opening = false;
+                    notify("error", micProblem(error));
+
+                    return;
+                }
+
+                this.opening = false;
+
+                // The person let go before the microphone opened: there is nothing to send.
+                if (this.pressed === false) {
+                    this.pressed = undefined;
+                    stream.getTracks().forEach((track) => track.stop());
+                    notify("info", "Hold the mic while you speak, then let go to send.");
+
+                    return;
+                }
+
+                const started = Date.now();
+                const type = recordingType();
+                const chunks = [];
+                let recorder;
+
+                try {
+                    recorder = new MediaRecorder(
+                        stream,
+                        type === "" ? undefined : { mimeType: type },
+                    );
+                } catch {
+                    recorder = new MediaRecorder(stream);
+                }
+
+                recorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        chunks.push(event.data);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    stream.getTracks().forEach((track) => track.stop());
+                    clearTimeout(this.timer);
+                    this.timer = null;
+                    this.recorder = null;
+                    setListening(false);
+
+                    if (current === this) {
+                        current = null;
+                    }
+
+                    const dropped = this.dropped;
+
+                    this.dropped = false;
+
+                    if (dropped) {
+                        return;
+                    }
+
+                    if ((Date.now() - started) / 1000 < MIN_SECONDS) {
+                        notify("info", "Hold the mic while you speak, then let go to send.");
+
+                        return;
+                    }
+
+                    this.transcribe(
+                        element,
+                        new Blob(chunks, { type: recorder.mimeType || "audio/webm" }),
+                    );
+                };
+
+                this.recorder = recorder;
+                this.dropped = false;
+                current = this;
+                setListening(true);
+                recorder.start();
+                this.timer = setTimeout(() => this.stop(), MAX_SECONDS * 1000);
+            },
+            /** Send one clip, and put the words it holds where the caret is (after the text, when the box has no focus). */
+            async transcribe(element, clip) {
+                const notice = notify("info", "Working out the words…");
+                let words;
+
+                try {
+                    ({ text: words } = await api("voice/transcribe", clip));
+                } catch (error) {
+                    dismiss(notice);
+                    notify("error", error.message ?? String(error));
+
+                    return;
+                }
+
+                dismiss(notice);
+                const said = String(words ?? "").trim();
+
+                if (said === "") {
+                    notify("info", ERRORS["no-speech"]);
+
+                    return;
+                }
+
+                const focused = document.activeElement === element;
+                const at = focused ? element.selectionStart : element.value.length;
+                const end = focused ? element.selectionEnd : at;
+                const { value, at: caret } = join(
+                    element.value.slice(0, at),
+                    said,
+                    element.value.slice(end),
+                );
+
+                element.value = value;
+
+                if (focused) {
+                    element.setSelectionRange(caret, caret);
+                }
+
+                hear.current(value, caret);
+            },
+            /** Hold to talk: the press opens the microphone, and letting go stops it and sends the clip. */
+            press() {
+                if (this.recorder || this.opening || this.recognition) {
+                    return;
+                }
+
+                this.pressed = true;
+                this.start();
+            },
+            release() {
+                this.pressed = false;
+
+                if (this.recorder) {
+                    this.stop();
+                }
+            },
+            /** Whether this browser dictates by holding the mic down, rather than by tapping it to start and stop. */
+            hold() {
+                return typeof Recognizer() !== "function" || serverMode();
+            },
             toggle() {
-                if (this.recognition) {
+                if (this.recognition || this.recorder) {
                     this.stop();
                 } else {
+                    this.pressed = undefined;
                     this.start();
                 }
             },
@@ -317,29 +580,80 @@ export function useDictation(box, onText, { top = false } = {}) {
 
     return {
         listening,
+        hold: () => dictation.hold(),
         toggle: () => dictation.toggle(),
+        press: () => dictation.press(),
+        release: () => dictation.release(),
         stop: (drop) => dictation.stop(drop),
     };
 }
 
-/** The mic: starts dictation, and while it listens, stops it. None where the browser cannot recognise speech. */
+/**
+ * The mic: starts dictation, and while it listens, stops it. Where dictation goes to the server it is held down instead:
+ * the press records, and letting go sends the clip. None where the browser can neither recognise nor record.
+ */
 export function MicButton({ dictation, class: className = "", size = 17, part }) {
     if (!voiceAvailable()) {
         return null;
     }
 
-    const { listening, toggle } = dictation;
+    const { listening, toggle, press, release } = dictation;
+    const hold = dictation.hold();
+
+    const down = (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) {
+            return;
+        }
+
+        event.preventDefault();
+
+        try {
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+        } catch {
+            // A pointer this page cannot capture: the press counts anyway.
+        }
+
+        press();
+    };
+
+    const up = (event) => {
+        try {
+            if (event.currentTarget.hasPointerCapture?.(event.pointerId) === true) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // Nothing was captured, so there is nothing to let go.
+        }
+
+        release();
+    };
 
     return html`<button
         type="button"
         class=${`icon-button mic-button ${listening ? "listening" : ""} ${className}`}
         data-part=${part}
+        data-hold=${hold ? "true" : undefined}
         aria-label="Dictate"
         aria-pressed=${listening ? "true" : "false"}
-        title=${listening ? "Listening: tap to stop (Alt+V)" : "Dictate (Alt+V)"}
+        title=${title(hold, listening)}
         onMouseDown=${(event) => event.preventDefault()}
-        onClick=${toggle}
+        onPointerDown=${hold ? down : undefined}
+        onPointerUp=${hold ? up : undefined}
+        onPointerCancel=${hold ? up : undefined}
+        onContextMenu=${hold ? (event) => event.preventDefault() : undefined}
+        onClick=${hold ? undefined : toggle}
     >
         <${Icon} name="mic" size=${size} />
     </button>`;
+}
+
+/** What the mic says it does: held down, or tapped, and what happens while it listens. */
+function title(hold, listening) {
+    if (hold) {
+        return listening
+            ? "Recording: let go to send (Alt+V stops)"
+            : "Hold to dictate (Alt+V starts)";
+    }
+
+    return listening ? "Listening: tap to stop (Alt+V)" : "Dictate (Alt+V)";
 }

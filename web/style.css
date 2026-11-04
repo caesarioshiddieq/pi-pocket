@@ -3912,6 +3912,12 @@ pre.diff .del {
     box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
+/* Held down, the mic records: a press is the whole gesture, so the page takes no other one on it. */
+.mic-button[data-hold="true"] {
+    touch-action: none;
+    user-select: none;
+}
+
 .mic-button.listening::after {
     content: "";
     position: absolute;

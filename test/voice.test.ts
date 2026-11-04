@@ -9,7 +9,8 @@ const STUBS: Record<string, string> = {
         export const useRef = (current) => ({ current });
         export const useEffect = (effect) => globalThis.voiceCleanups.push(effect());
     `,
-    "./store.js": `export const notify = () => {};`,
+    "./store.js": `export const notify = () => {}; export const dismiss = () => {};
+        export const api = async () => ({ text: "" });`,
     "./ui.js": `export const html = () => null; export const Icon = () => null;`,
 };
 

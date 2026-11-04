@@ -23,12 +23,20 @@ import type { User } from "../config.ts";
 import { HttpError } from "../errors.ts";
 import { desktopTheme, wallpaperFile } from "../omarchy.ts";
 import { runningNow } from "../running.ts";
+import { MAX_CLIP, transcribe } from "../voice.ts";
 import { serveImage } from "./assets.ts";
 import { browserRoutes } from "./browser-routes.ts";
 import { conversationRoutes } from "./conversation-routes.ts";
 import { createEventStreams } from "./events.ts";
 import { extensionRoute } from "./extension-routes.ts";
-import { type ApiRequest, conversationId, type HttpOptions, json, readJson } from "./io.ts";
+import {
+    type ApiRequest,
+    conversationId,
+    type HttpOptions,
+    json,
+    readBody,
+    readJson,
+} from "./io.ts";
 import { pushRoutes } from "./push-routes.ts";
 
 /** This machine's non-internal IPv4 addresses, for invite links other devices on its networks can open. */
@@ -166,6 +174,19 @@ export function createApi(options: HttpOptions, auth: Auth) {
             app.rename(user, name);
 
             return json(response, 200, { ok: true });
+        }
+
+        // A clip the browser recorded, for dictation where the browser has no recogniser of its own (`voice.ts`).
+        if (first === "voice" && second === "transcribe" && method === "POST") {
+            const type = (String(request.headers["content-type"] ?? "").split(";")[0] ?? "").trim();
+
+            if (!type.startsWith("audio/")) {
+                throw new HttpError(400, "Send the clip as audio.");
+            }
+
+            const clip = await readBody(request, MAX_CLIP);
+
+            return json(response, 200, { text: await transcribe(clip, type) });
         }
 
         if (first === "folder-favorites" && second === undefined && method === "GET") {
