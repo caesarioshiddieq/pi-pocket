@@ -1,0 +1,22 @@
+{
+  "checks": [
+    {
+      "id": "types",
+      "kind": "static",
+      "run": ["npm", "run", "check"],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "suite",
+      "kind": "test",
+      "run": ["bash", "-lc", "node --test --test-concurrency=1 test/*.test.ts"],
+      "testsFrom": "ℹ pass (\\d+)",
+      "timeoutSeconds": 3600
+    }
+  ],
+  "boot": {
+    "run": ["node", "bin/pi-pocket.js", "--port", "8791", "--data", "{tmp}", "--access", "local"],
+    "readyUrl": "http://127.0.0.1:8791/",
+    "timeoutSeconds": 120
+  }
+}
