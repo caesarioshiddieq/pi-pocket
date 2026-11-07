@@ -150,6 +150,28 @@ Shapes the request that every model call sends. `shape` gets the payload Pi buil
 
 A shaper can change what a provider bills or how it answers, and its effect lasts until it is removed. Say so when you ask the owner to turn the module on.
 
+### `registerQuotaSource`
+
+```ts
+registerQuotaSource(source: QuotaSource): () => void;
+```
+
+Since 0.27.0 · Experimental
+
+Adds a provider's quota that your module reads itself to the usage sheet and the `usage_quota` tool, beside the providers Pi signs in to. Use it for a client that keeps its own sign-in, such as a local command-line tool: Pi's auth store has nothing for it, and your module answers for it. Added in this fork; upstream Pi Pocket does not have it.
+
+Pi reads a source when it is registered, then on quota refreshes: the background refresh every ten minutes, the sheet's refresh each minute while it is open, and the tool. It reads each source **at most every five minutes**, however often a refresh runs, and shows the last answer in between: a read may start a process. Each read has 15 seconds: then Pi aborts the signal and shows a time-out. A read that fails or times out shows as an error for this provider alone, with its message as it is, to everyone who sees the sheet (everyone, as for Pi's own providers).
+
+Pi keeps only the fields of `QuotaReport` that it shows, drops a bucket or metric whose id came before, takes a `"percent"` bucket as a share of 100, sets the provider's id and name to the source's, and warns the owner once per window past 80%, as for its own providers. The name is made one line of plain text, and may not be a built-in provider's.
+
+The id may not be a built-in provider's (`openai-codex`, `opencode-go`, `commandcode`, `commandcode-b`); such a call throws. The newest registration of an id wins, and the return value removes only its own:
+
+```ts
+web.onDispose(host.registerQuotaSource({ id: "example-plan", displayName: "Example plan", read: async (signal) => report }));
+```
+
+A read runs in the server with the module's rights. Do not put a credential in the report: the sheet and the tool show it.
+
 ### `thinkingLevels`
 
 ```ts
@@ -354,6 +376,79 @@ A refusal throws an `Error` with a `code`:
 Other failures, such as a name that does not resolve, reject as `fetch` does. The response's `url` is the address of the last redirect, and `redirected` says whether it followed one.
 
 The text of a page is text from outside: give it to Pi through [`text`](#text) ([Text from other places](../host.md#text-from-other-places)). [examples/read-page.ts](../../examples/read-page.ts) is a tool that uses both.
+
+#### `QuotaSource`
+
+```ts
+interface QuotaSource {
+    id: string;
+    displayName: string;
+    read: (signal: AbortSignal) => Promise<QuotaReport>;
+}
+```
+
+Since 0.27.0 · Experimental
+
+- `id`: lower-case letters, digits, and dashes, up to 40; not a built-in provider's.
+- `displayName`: the provider's name on the sheet and in the tool's text.
+- `read`: the report now; Pi aborts `signal` after 15 seconds.
+
+#### `QuotaReport`
+
+```ts
+interface QuotaReport {
+    accountLabel?: string;
+    capturedAt?: number;
+    buckets: QuotaBucket[];
+    metrics: QuotaMetric[];
+    notes?: string[];
+    providerId?: string;
+    providerName?: string;
+}
+```
+
+Since 0.27.0 · Experimental
+
+- `buckets`: windows and allowances, each drawn as a bar.
+- `metrics`: figures, each shown as a line.
+- `notes`: short lines, such as the plan.
+- `accountLabel`: shown after the provider's name.
+- `capturedAt`, `providerId`, `providerName`: ignored; Pi sets them.
+
+#### `QuotaBucket`
+
+```ts
+interface QuotaBucket {
+    id: string;
+    label: string;
+    used?: number;
+    remaining?: number;
+    limit?: number;
+    unit: "percent" | "usd" | "count";
+    windowMinutes?: number;
+    resetsAt?: number;
+}
+```
+
+Since 0.27.0 · Experimental
+
+- `unit`: `"percent"` reads `used` as a share of 100 (Pi sets `limit` to 100); `"usd"` and `"count"` read it against `limit`.
+- `resetsAt`: epoch seconds; 0 means the window is not running.
+
+#### `QuotaMetric`
+
+```ts
+interface QuotaMetric {
+    id: string;
+    label: string;
+    value: string | number;
+    unit?: "percent" | "usd" | "count";
+}
+```
+
+Since 0.27.0 · Experimental
+
+- `value`: a number, or short text.
 
 #### `PublicFetchInit`
 

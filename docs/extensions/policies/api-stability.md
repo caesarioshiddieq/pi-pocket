@@ -43,6 +43,7 @@ These members are public:
 - `resolveModel(spec)`, `subagentModels()`, `modelProblem(ref, fresh?)`, `modelInfo(spec)` (exact local metadata, since 0.16.0)
 - `requesterOf(conversationId)`
 - `roleOf(personId)` (experimental, since 0.27.0)
+- `registerQuotaSource(source)` (experimental, since 0.27.0, this fork)
 - `skillPaths()`, `skills(cwd)`
 - `heldBack(conversationId)`, `onLimitsChanged(listener)`
 - `linkedSessions`: `start`, `send`, `list` (experimental in 0.14, see [Experimental](#experimental))

@@ -8,10 +8,12 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ConversationId, EntryId } from "@earendil-works/pi-durable";
 import {
+    checkedReport,
     commandCodeOrgId,
     normalizeCodex,
     normalizeCommandCode,
     normalizeOpenCodeZen,
+    querySources,
 } from "../src/server/usage-providers.ts";
 import { UsageIndexDoc, UsageQuotaDoc } from "../src/server/docs.ts";
 import type { UsageSummary, UsageWindow } from "../src/server/usage.ts";
@@ -588,4 +590,305 @@ test("a flush the ledger refuses counts nothing, and the next counts each entry 
         "the refused entry landed once",
     );
     void entryId;
+});
+
+// ─── Providers a module reads itself (host.registerQuotaSource) ──────────────
+
+const planReport = {
+    providerId: "ignored",
+    providerName: "Ignored",
+    capturedAt: 1,
+    accountLabel: "me",
+    buckets: [
+        {
+            id: "five_hour",
+            label: "5h window",
+            used: 24,
+            remaining: 76,
+            limit: 100,
+            unit: "percent",
+            windowMinutes: 300,
+            resetsAt: 1_794_024_000,
+        },
+        { id: "bad-unit", label: "Tokens", used: 3, unit: "tokens" },
+        { id: "five_hour", label: "Duplicate", used: 99, unit: "percent" },
+        { id: "seven_day", label: "7d window", used: 81, unit: "percent" },
+        { label: "No id", used: 1, unit: "percent" },
+    ],
+    metrics: [{ id: "extra", label: "Extra usage", value: "off", secret: "never-shown" }],
+    notes: ["Plan: team", 42, "x".repeat(500)],
+    token: "never-shown",
+};
+
+test("a module's report keeps only what the sheet shows, under the source's own id and name", () => {
+    const report = checkedReport(
+        { id: "claude-code", displayName: "Claude (Claude Code)" },
+        planReport,
+        99,
+    );
+
+    assert.equal(report.providerId, "claude-code");
+    assert.equal(report.providerName, "Claude (Claude Code)");
+    assert.equal(report.capturedAt, 99);
+    assert.deepEqual(
+        report.buckets,
+        [
+            planReport.buckets[0],
+            { id: "seven_day", label: "7d window", used: 81, limit: 100, unit: "percent" },
+        ],
+        "an unknown unit, no id, or an id seen before is dropped; a percentage is of 100",
+    );
+    assert.deepEqual(report.metrics, [{ id: "extra", label: "Extra usage", value: "off" }]);
+    assert.equal(report.notes?.[0], "Plan: team");
+    assert.equal(report.notes?.length, 2, "a note that is not text is dropped");
+    assert.ok(report.notes![1]!.length <= 200, "a long note is cut");
+    assert.doesNotMatch(
+        JSON.stringify(report),
+        /never-shown/,
+        "fields Pi does not show never pass through",
+    );
+
+    for (const empty of [
+        undefined,
+        "text",
+        { buckets: [], metrics: [] },
+        { buckets: [{ id: "x", label: "y", unit: "nope" }] },
+    ]) {
+        assert.throws(
+            () => checkedReport({ id: "x", displayName: "X" }, empty, 1),
+            /no report|nothing|no window/,
+        );
+    }
+});
+
+test("module sources answer each for itself: a failure or a hang is that source's error alone", async () => {
+    let aborted = false;
+    const quota = await querySources(
+        [
+            { id: "good", displayName: "Good", read: async () => planReport as never },
+            {
+                id: "broken",
+                displayName: "Broken",
+                read: async () => {
+                    throw new Error("no login\n  here");
+                },
+            },
+            {
+                id: "slow",
+                displayName: "Slow",
+                read: (signal) =>
+                    new Promise((resolve) => {
+                        signal.addEventListener("abort", () => {
+                            aborted = true;
+                        });
+                        setTimeout(() => resolve(planReport as never), 5_000).unref();
+                    }),
+            },
+        ],
+        50,
+    );
+
+    assert.equal(quota.good?.report?.buckets[0]?.used, 24);
+    assert.equal(quota.broken?.error, "Broken: no login here");
+    assert.match(quota.slow?.error ?? "", /^Slow: timed out/);
+    assert.equal(aborted, true, "the hung read's signal is aborted");
+});
+
+test("a registered source joins the refresh and the tool's text, and leaves with its removal", async () => {
+    assert.throws(
+        () =>
+            app.usage.registerQuotaSource({
+                id: "openai-codex",
+                displayName: "Fake",
+                read: async () => planReport as never,
+            }),
+        /built-in provider/,
+    );
+    assert.throws(
+        () =>
+            app.usage.registerQuotaSource({
+                id: "Bad Id",
+                displayName: "Fake",
+                read: async () => planReport as never,
+            }),
+        /lower-case/,
+    );
+    assert.throws(
+        () =>
+            app.usage.registerQuotaSource({
+                id: "fake-codex",
+                displayName: "openai codex",
+                read: async () => planReport as never,
+            }),
+        /name OpenAI Codex|name openai codex is a built-in/,
+    );
+    assert.throws(
+        () =>
+            app.usage.registerQuotaSource({
+                id: "blank",
+                displayName: "\n\t ",
+                read: async () => planReport as never,
+            }),
+        /display name/,
+    );
+
+    let reads = 0;
+    const older = app.usage.registerQuotaSource({
+        id: "example-plan",
+        displayName: "Old plan",
+        read: async () => planReport as never,
+    });
+    const remove = app.usage.registerQuotaSource({
+        id: "example-plan",
+        displayName: "Example plan",
+        read: async () => {
+            reads++;
+
+            return planReport as never;
+        },
+    });
+
+    older(); // the older registration's removal leaves the newer one in place
+    const quota = await app.usage.refreshQuota(true);
+
+    assert.equal(reads, 1);
+    assert.equal(quota["example-plan"]?.report?.providerName, "Example plan");
+
+    const text = await app.usage.toolText("example-plan");
+
+    assert.match(text, /1\/1 from their own APIs/);
+    assert.match(text, /Example plan — me/);
+    assert.match(text, /5h window: 24% used/);
+
+    remove();
+    await app.usage.refreshQuota(true);
+    await assert.rejects(() => app.usage.toolText("example-plan"), /No provider example-plan/);
+    assert.equal(
+        (await app.usage.refreshQuota(true))["example-plan"],
+        undefined,
+        "a removed source leaves the snapshot",
+    );
+});
+
+test("a module source is read at most every five minutes, however often the sheet forces a refresh", async () => {
+    let reads = 0;
+    const remove = app.usage.registerQuotaSource({
+        id: "counted-plan",
+        displayName: "Counted\nplan\u0007",
+        read: async () => {
+            reads++;
+
+            return planReport as never;
+        },
+    });
+
+    try {
+        await app.usage.refreshQuota(true);
+        await app.usage.refreshQuota(true);
+        await app.usage.refreshQuota(true);
+
+        assert.equal(reads, 1, "the sheet's forced refreshes reuse the source's answer");
+
+        const text = await app.usage.toolText("counted-plan");
+
+        assert.match(text, /Counted plan — me/, "the name is one line of plain text");
+        assert.equal(reads, 1);
+    } finally {
+        remove();
+    }
+});
+
+test("a source registered after start is read without anyone asking, and one removed mid-read leaves no answer", async () => {
+    // Nobody asks for a refresh here: the registration alone has the source read (it starts the poll, or wakes it).
+    let polled = 0;
+    const removePolled = app.usage.registerQuotaSource({
+        id: "polled-plan",
+        displayName: "Polled plan",
+        read: async () => {
+            polled++;
+
+            return planReport as never;
+        },
+    });
+
+    await until(() => polled === 1, "the new source is read without a refresh asked for");
+    removePolled();
+
+    let release: () => void = () => {};
+
+    const gate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    let started = false;
+    const removeSlow = app.usage.registerQuotaSource({
+        id: "removed-plan",
+        displayName: "Removed plan",
+        read: async () => {
+            started = true;
+            await gate;
+
+            return planReport as never;
+        },
+    });
+    const running = app.usage.refreshQuota(true);
+
+    await until(() => started, "the slow source started its read");
+    removeSlow();
+    release();
+
+    const quota = await running;
+
+    assert.equal(quota["removed-plan"], undefined, "an answer for a removed source is not kept");
+    assert.equal(quota["polled-plan"], undefined);
+});
+
+test("a source replaced while its old read runs gets its own answer, not the old one", async () => {
+    let release: () => void = () => {};
+
+    const gate = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    let started = false;
+    const removeOld = app.usage.registerQuotaSource({
+        id: "replaced-plan",
+        displayName: "Replaced plan",
+        read: async () => {
+            started = true;
+            await gate;
+
+            return { ...planReport, notes: ["old answer"] } as never;
+        },
+    });
+    const running = app.usage.refreshQuota(true);
+
+    await until(() => started, "the old registration started its read");
+    removeOld();
+
+    let newReads = 0;
+    const removeNew = app.usage.registerQuotaSource({
+        id: "replaced-plan",
+        displayName: "Replaced plan",
+        read: async () => {
+            newReads++;
+
+            return { ...planReport, notes: ["new answer"] } as never;
+        },
+    });
+
+    try {
+        release();
+        await running;
+
+        const text = await app.usage.toolText("replaced-plan");
+
+        assert.doesNotMatch(
+            text,
+            /old answer/,
+            "the old registration's answer is not kept for the new one",
+        );
+        assert.match(text, /new answer/);
+        assert.ok(newReads >= 1);
+    } finally {
+        removeNew();
+    }
 });

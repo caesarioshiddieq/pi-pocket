@@ -831,6 +831,7 @@ export class PocketApp {
                     }
                 };
             },
+            registerQuotaSource: (source) => this.usage.registerQuotaSource(source),
             fetchPublic: createPublicFetch(),
             requesterOf: (conversationId) => this.attribution.requesterOf(conversationId),
             roleOf: (personId) => this.config.userById(personId)?.role,

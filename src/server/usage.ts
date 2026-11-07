@@ -13,8 +13,15 @@ import type { PocketApp } from "./app.ts";
 import type { User } from "./config.ts";
 import { type UsageCell, UsageIndexDoc, UsageQuotaDoc } from "./docs.ts";
 import { describe } from "./errors.ts";
-import type { ProviderQuota } from "./usage-providers.ts";
-import { queryAll, readCredentials, renderQuota, SUPPORTED } from "./usage-providers.ts";
+import type { ProviderQuota, QuotaSource } from "./usage-providers.ts";
+import {
+    queryAll,
+    querySources,
+    readCredentials,
+    renderQuota,
+    SOURCE_ID,
+    SUPPORTED,
+} from "./usage-providers.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -32,6 +39,8 @@ const QUOTA_EVERY_MS = 10 * 60_000;
 const QUOTA_RETRY_MS = 20 * 60_000;
 /** A refresh younger than this is not asked again: the sheet and the tool share it. */
 const QUOTA_MIN_MS = 30_000;
+/** A module source is read at most this often, however often the sheet or the tool asks: each read may start a process. */
+const SOURCE_MIN_MS = 5 * 60_000;
 
 /** A bucket past this share of its limit warns, once per window. */
 const WARN_AT = 0.8;
@@ -118,9 +127,18 @@ export class Usage {
     #quota: Record<string, ProviderQuota> = {};
     #warned: Record<string, number> = {};
     #quotaTimer: NodeJS.Timeout | undefined;
-    #quotaRunning = false;
+    /** The refresh under way, which a second caller waits for instead of reading the old snapshot. */
+    #refreshing: Promise<Record<string, ProviderQuota>> | undefined;
     #polling = false;
     #lastRefreshAt = 0;
+    /** Providers that modules read themselves (`host.registerQuotaSource`), by id; the newest registration wins. */
+    readonly #sources = new Map<string, QuotaSource>();
+    /** Each source's last answer, kept for SOURCE_MIN_MS; a new registration starts without one. */
+    readonly #sourceAnswers = new Map<string, ProviderQuota>();
+    /** Counts registrations and removals, so a refresh that ran across one does not count as fresh. */
+    #sourcesVersion = 0;
+    #loaded = false;
+    #closed = false;
 
     constructor(app: PocketApp) {
         this.#app = app;
@@ -139,10 +157,15 @@ export class Usage {
 
         await this.#backfill(ids);
 
-        // Nothing signed in to ask: no background poll at all. The tool and the sheet still refresh on demand.
-        if (Object.keys(await readCredentials(getAgentDir())).length > 0) {
-            this.#polling = true;
-            this.#scheduleQuota(0);
+        this.#loaded = true;
+
+        // Nothing signed in to ask and no module source: no background poll at all. The tool and the sheet still
+        // refresh on demand, and a source registered later starts the poll.
+        if (
+            Object.keys(await readCredentials(getAgentDir())).length > 0 ||
+            this.#sources.size > 0
+        ) {
+            this.#startPolling();
         }
     }
 
@@ -445,14 +468,51 @@ export class Usage {
 
     /** Refresh every provider now — unless one just answered and `force` is not set — store it, warn past the threshold. */
     async refreshQuota(force = false): Promise<Record<string, ProviderQuota>> {
-        if (this.#quotaRunning || (!force && Date.now() - this.#lastRefreshAt < QUOTA_MIN_MS)) {
+        if (this.#refreshing !== undefined) {
+            return this.#refreshing;
+        }
+
+        if (!force && Date.now() - this.#lastRefreshAt < QUOTA_MIN_MS) {
             return this.#quota;
         }
 
-        this.#quotaRunning = true;
+        this.#refreshing = this.#refresh().finally(() => {
+            this.#refreshing = undefined;
+        });
+
+        return this.#refreshing;
+    }
+
+    async #refresh(): Promise<Record<string, ProviderQuota>> {
+        const version = this.#sourcesVersion;
 
         try {
-            const providers = await queryAll(getAgentDir());
+            const now = Date.now();
+            const due = [...this.#sources.values()].filter(
+                (source) =>
+                    now - (this.#sourceAnswers.get(source.id)?.capturedAt ?? 0) >= SOURCE_MIN_MS,
+            );
+            const [signedIn, fresh] = await Promise.all([
+                queryAll(getAgentDir()),
+                querySources(due),
+            ]);
+
+            for (const [id, answer] of Object.entries(fresh)) {
+                // A source replaced or removed while it was read: its answer is not this registration's.
+                if (version === this.#sourcesVersion && this.#sources.has(id)) {
+                    this.#sourceAnswers.set(id, answer);
+                }
+            }
+
+            const fromModules = Object.fromEntries(
+                [...this.#sources.keys()]
+                    .map((id) => [id, this.#sourceAnswers.get(id)] as const)
+                    .filter(
+                        (entry): entry is readonly [string, ProviderQuota] =>
+                            entry[1] !== undefined,
+                    ),
+            );
+            const providers = { ...signedIn, ...fromModules };
             const stored = await this.#app.harness.commit(async (tx) => {
                 const doc = await tx.doc(UsageQuotaDoc);
 
@@ -466,7 +526,8 @@ export class Usage {
 
             this.#quota = stored.providers;
             this.#warned = stored.warned;
-            this.#lastRefreshAt = Date.now();
+            // A source came or went while this ran: the next refresh runs, however soon it is asked for.
+            this.#lastRefreshAt = version === this.#sourcesVersion ? Date.now() : 0;
             this.#scheduleQuota(QUOTA_EVERY_MS);
 
             return this.#quota;
@@ -475,9 +536,16 @@ export class Usage {
             this.#scheduleQuota(QUOTA_RETRY_MS);
 
             return this.#quota;
-        } finally {
-            this.#quotaRunning = false;
         }
+    }
+
+    #startPolling(): void {
+        if (this.#polling || this.#closed) {
+            return;
+        }
+
+        this.#polling = true;
+        this.#scheduleQuota(0);
     }
 
     #scheduleQuota(afterMs: number): void {
@@ -520,7 +588,7 @@ export class Usage {
                 this.#warned[key] = resetsAt;
                 this.#app.notice(
                     "warning",
-                    `${displayNameOf(id)} is at ${Math.round(share * 100)}% of its ${bucket.label.toLowerCase()}${
+                    `${this.#displayName(id)} is at ${Math.round(share * 100)}% of its ${bucket.label.toLowerCase()}${
                         resetsAt > 0
                             ? `, resets ${new Date(resetsAt * 1000).toLocaleString("en-US")}`
                             : ""
@@ -530,29 +598,108 @@ export class Usage {
         }
     }
 
+    /**
+     * Add a provider that a module reads itself. Its id may not be a built-in provider's. The newest registration of
+     * an id wins; the returned function removes this one, and changes nothing once a newer one took its place.
+     */
+    registerQuotaSource(source: QuotaSource): () => void {
+        if (!SOURCE_ID.test(source.id)) {
+            throw new Error(
+                `A quota source id is lower-case letters, digits, and dashes, up to 40: ${JSON.stringify(source.id)}`,
+            );
+        }
+
+        if (SUPPORTED.some((target) => target.id === source.id)) {
+            throw new Error(`The quota source id ${source.id} is a built-in provider's`);
+        }
+
+        // One line of plain text: a name reaches the tool's text and the owner's notices as it is.
+        const displayName =
+            typeof source.displayName === "string"
+                ? source.displayName
+                      .replace(/[\p{Cc}\p{Cf}\s]+/gu, " ")
+                      .trim()
+                      .slice(0, 80)
+                : "";
+
+        if (typeof source.read !== "function" || !displayName) {
+            throw new Error(
+                `The quota source ${source.id} needs a display name and a read function`,
+            );
+        }
+
+        if (
+            SUPPORTED.some(
+                (target) => target.displayName.toLowerCase() === displayName.toLowerCase(),
+            )
+        ) {
+            throw new Error(`The quota source name ${displayName} is a built-in provider's`);
+        }
+
+        const entry: QuotaSource = { id: source.id, displayName, read: source.read };
+
+        const changed = (): void => {
+            this.#sourcesVersion++;
+            this.#sourceAnswers.delete(entry.id);
+            // The snapshot does not have the change yet: the next refresh runs, however recent the last one was, and
+            // a running poll runs it now.
+            this.#lastRefreshAt = 0;
+
+            if (this.#polling) {
+                this.#scheduleQuota(0);
+            }
+        };
+
+        this.#sources.set(entry.id, entry);
+        changed();
+
+        // Before the start, `load` decides; after it, a source alone is reason to poll.
+        if (this.#loaded) {
+            this.#startPolling();
+        }
+
+        return () => {
+            if (this.#sources.get(entry.id) === entry) {
+                this.#sources.delete(entry.id);
+                changed();
+            }
+        };
+    }
+
+    #ids(): string[] {
+        return [...SUPPORTED.map((target) => target.id), ...this.#sources.keys()];
+    }
+
+    #displayName(id: string): string {
+        return (
+            this.#sources.get(id)?.displayName ??
+            SUPPORTED.find((target) => target.id === id)?.displayName ??
+            id
+        );
+    }
+
     /** The tool's answer: the snapshot, refreshed first so it is fresh. */
     async toolText(provider?: string): Promise<string> {
         await this.refreshQuota();
 
-        const ids = SUPPORTED.map((target) => target.id).filter(
-            (id) => provider === undefined || id === provider,
-        );
+        const known = this.#ids();
+        const ids = known.filter((id) => provider === undefined || id === provider);
 
         if (ids.length === 0) {
-            throw new Error(
-                `No provider ${provider}. Supported: ${SUPPORTED.map((target) => target.id).join(", ")}.`,
-            );
+            throw new Error(`No provider ${provider}. Supported: ${known.join(", ")}.`);
         }
 
         const quota = this.#quota;
+        const names = Object.fromEntries(ids.map((id) => [id, this.#displayName(id)]));
 
-        return `Provider usage and quota (${ids.filter((id) => quota[id]?.error === undefined).length}/${ids.length} from their own APIs):\n\n${renderQuota(quota, Date.now(), ids)}`;
+        return `Provider usage and quota (${ids.filter((id) => quota[id]?.error === undefined).length}/${ids.length} from their own APIs):\n\n${renderQuota(quota, Date.now(), ids, names)}`;
     }
 
     close(): void {
         // A refresh that finishes after this must not schedule another one: on a same-process reopen the old
         // poller would outlive the closed server.
         this.#polling = false;
+        this.#closed = true;
         clearTimeout(this.#timer);
         clearTimeout(this.#quotaTimer);
     }
@@ -573,8 +720,4 @@ function usageCellOf(message: MessageUsage | undefined): UsageCell {
         cacheWrite: used?.cacheWrite ?? 0,
         cost: used?.cost?.total ?? 0,
     };
-}
-
-function displayNameOf(id: string): string {
-    return SUPPORTED.find((target) => target.id === id)?.displayName ?? id;
 }

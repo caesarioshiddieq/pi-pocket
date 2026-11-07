@@ -106,7 +106,9 @@ function QuotaBar({ bucket }) {
     const shareText =
         bucket.unit === "percent"
             ? `${Math.round(used)}% used`
-            : `$${used.toFixed(2)}${bucket.limit !== undefined ? ` of $${bucket.limit.toFixed(2)}` : ""}`;
+            : bucket.unit === "count"
+              ? `${used.toLocaleString()}${bucket.limit !== undefined ? ` of ${bucket.limit.toLocaleString()}` : ""} used`
+              : `$${used.toFixed(2)}${bucket.limit !== undefined ? ` of $${bucket.limit.toFixed(2)}` : ""}`;
     const resets = resetAt(bucket.resetsAt);
 
     return h(

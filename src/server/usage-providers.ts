@@ -695,6 +695,164 @@ export async function queryAll(
     return Object.fromEntries(results);
 }
 
+// ─── Module sources: a provider a module reads itself (`host.registerQuotaSource`) ─
+
+/**
+ * A provider's quota that an extension module reads with its own means, such as a local client that keeps its own
+ * sign-in. Pi's auth store has no sign-in for it; the module answers for itself.
+ */
+export type QuotaSource = {
+    /** Lower-case letters, digits, and dashes; not a built-in provider's id. */
+    id: string;
+    displayName: string;
+    /** The provider's report now. A failure or a timeout shows as that provider's error, never the others'. */
+    read: (signal: AbortSignal) => Promise<UsageReport>;
+};
+
+export const SOURCE_ID = /^[a-z0-9][a-z0-9-]{0,39}$/u;
+const UNITS: readonly UsageUnit[] = ["percent", "usd", "count"];
+const NOTE_CHARS = 200;
+const MAX_ROWS = 20;
+
+/**
+ * A module's report as the sheet and the tool may show it: only the fields they render, in their types, under the id
+ * and name it registered. Anything else is dropped; a report with nothing to show is an error.
+ */
+export function checkedReport(
+    source: Pick<QuotaSource, "id" | "displayName">,
+    value: unknown,
+    capturedAt: number,
+): UsageReport {
+    const row = asObject(value);
+
+    if (row === undefined) {
+        throw new Error("the module returned no report");
+    }
+
+    const buckets: UsageBucket[] = [];
+
+    for (const each of Array.isArray(row.buckets) ? row.buckets.slice(0, MAX_ROWS) : []) {
+        const bucket = asObject(each);
+        const id = asString(bucket?.id, 60);
+        const label = asString(bucket?.label, 80);
+        const unit = UNITS.find((known) => known === bucket?.unit);
+
+        // An id twice would share the sheet's row key and the warning's mark: the first one stays.
+        if (
+            bucket === undefined ||
+            id === undefined ||
+            label === undefined ||
+            unit === undefined ||
+            buckets.some((kept) => kept.id === id)
+        ) {
+            continue;
+        }
+
+        const used = asNumber(bucket.used);
+        const remaining = asNumber(bucket.remaining);
+        // A percentage is of 100, whether or not the module said so: the warning past 80% needs the limit.
+        const limit = unit === "percent" ? 100 : asNumber(bucket.limit);
+        const windowMinutes = asNonnegativeNumber(bucket.windowMinutes);
+        const resetsAt = asEpochSeconds(bucket.resetsAt);
+
+        buckets.push({
+            id,
+            label,
+            unit,
+            ...(used !== undefined ? { used } : {}),
+            ...(remaining !== undefined ? { remaining } : {}),
+            ...(limit !== undefined ? { limit } : {}),
+            ...(windowMinutes !== undefined ? { windowMinutes } : {}),
+            ...(resetsAt !== undefined ? { resetsAt } : {}),
+        });
+    }
+
+    const metrics: UsageMetric[] = [];
+
+    for (const each of Array.isArray(row.metrics) ? row.metrics.slice(0, MAX_ROWS) : []) {
+        const metric = asObject(each);
+        const id = asString(metric?.id, 60);
+        const label = asString(metric?.label, 80);
+        const value =
+            typeof metric?.value === "number" && Number.isFinite(metric.value)
+                ? metric.value
+                : asString(metric?.value, 80);
+        const unit = UNITS.find((known) => known === metric?.unit);
+
+        if (
+            id !== undefined &&
+            label !== undefined &&
+            value !== undefined &&
+            !metrics.some((kept) => kept.id === id)
+        ) {
+            metrics.push({ id, label, value, ...(unit !== undefined ? { unit } : {}) });
+        }
+    }
+
+    const notes = (Array.isArray(row.notes) ? row.notes.slice(0, MAX_ROWS) : [])
+        .map((note) => asString(note, NOTE_CHARS))
+        .filter((note): note is string => note !== undefined);
+    const accountLabel = asString(row.accountLabel, 80);
+
+    if (buckets.length === 0 && metrics.length === 0) {
+        throw new Error("the module's report has no window or figure to show");
+    }
+
+    return {
+        providerId: source.id,
+        providerName: source.displayName,
+        capturedAt,
+        buckets,
+        metrics,
+        ...(accountLabel !== undefined ? { accountLabel } : {}),
+        ...(notes.length > 0 ? { notes } : {}),
+    };
+}
+
+/** Read each module source, each in its own time limit: one failing or hanging never holds up the others. */
+export async function querySources(
+    sources: readonly QuotaSource[],
+    timeoutMs = REQUEST_MS,
+): Promise<Record<string, ProviderQuota>> {
+    const results = await Promise.all(
+        sources.map(async (source): Promise<[string, ProviderQuota]> => {
+            const controller = new AbortController();
+            let timer: NodeJS.Timeout | undefined;
+
+            try {
+                const timeout = new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => {
+                        controller.abort();
+                        reject(new Error(`timed out after ${Math.round(timeoutMs / 1000)} s`));
+                    }, timeoutMs);
+                });
+                const value = await Promise.race([source.read(controller.signal), timeout]);
+
+                return [
+                    source.id,
+                    { report: checkedReport(source, value, Date.now()), capturedAt: Date.now() },
+                ];
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : String(error);
+
+                return [
+                    source.id,
+                    {
+                        error: `${source.displayName}: ${reason}`
+                            .replace(/\s+/g, " ")
+                            .slice(0, ERROR_CHARS),
+                        capturedAt: Date.now(),
+                    },
+                ];
+            } finally {
+                clearTimeout(timer);
+            }
+        }),
+    );
+
+    return Object.fromEntries(results);
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
 function windowLabel(minutes: number): string {
@@ -727,7 +885,9 @@ export function renderQuota(
     providers: Record<string, ProviderQuota>,
     now: number,
     ids: readonly string[] = Object.keys(providers),
+    names: Readonly<Record<string, string>> = {},
 ): string {
+    const displayNameOf = (id: string): string => names[id] ?? builtInName(id);
     const blocks: string[] = [];
 
     for (const id of ids) {
@@ -795,6 +955,6 @@ export function renderQuota(
     return blocks.join("\n\n");
 }
 
-function displayNameOf(id: string): string {
+function builtInName(id: string): string {
     return SUPPORTED.find((target) => target.id === id)?.displayName ?? id;
 }

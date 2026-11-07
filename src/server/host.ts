@@ -24,6 +24,7 @@ import type { Updates } from "./updates.ts";
 import type { RepoWatches } from "./repo-watches.ts";
 import type { TagChange } from "./session-tags.ts";
 import type { Usage } from "./usage.ts";
+import type { QuotaSource } from "./usage-providers.ts";
 import type { Watches } from "./watches.ts";
 import type { FetchPublic } from "./public-fetch.ts";
 import type { BrowserControl } from "./browser/page.ts";
@@ -392,6 +393,11 @@ export interface PocketHost {
      * the owner turned on shape requests.
      */
     shapeModelRequests(shape: ModelRequestShaper): () => void;
+    /**
+     * Add a provider's quota that the module reads itself, to the usage sheet and the `usage_quota` tool. Returns how
+     * to remove it; pass that to `web.onDispose`.
+     */
+    registerQuotaSource(source: QuotaSource): () => void;
     /**
      * Fetch for an address from outside (a model, a page, a person): it reaches only public internet addresses, checked
      * where each connection is made and at each redirect (`public-fetch.ts`).

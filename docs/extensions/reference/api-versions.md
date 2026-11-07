@@ -86,5 +86,6 @@ Each member in the reference has its own Since line. These parts came together:
 | Events, services, and settings: `host.on`, `web.provide`, `use`, `onService`, `settings`, `setting`, `onSettings`, `pocket.settings`, `onSettings` (experimental) | 0.22.0 |
 | Give PiP a message: `pocket.pip.ask` (experimental)                                                                                                               | 0.26.0 |
 | A person's role: `host.roleOf` (experimental)                                                                                                                     | 0.27.0 |
+| A provider's quota a module reads itself: `host.registerQuotaSource` and `QuotaSource` (experimental, this fork)                                                  | 0.27.0 |
 | The page's scroll position: `scroll` in the `host.browser` snapshot (experimental)                                                                                | 0.27.0 |
 | Answers to pick on an ask's card: `header`, `choices`, `multiple`, and `other` in `AskField` (experimental)                                                       | 0.27.0 |

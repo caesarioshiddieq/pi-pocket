@@ -10,12 +10,12 @@ export default function createUsage(host: PocketHost) {
     const usageQuota = defineTool({
         name: "usage_quota",
         description:
-            "Live usage and quota for the signed-in providers (OpenAI Codex, OpenCode Go, Command Code accounts): each provider's own usage endpoint, refreshed on demand. Read-only.",
+            "Live usage and quota for the signed-in providers (OpenAI Codex, OpenCode Go, Command Code accounts, module sources): each provider's own usage endpoint, refreshed on demand. Read-only.",
         parameters: Type.Object({
             provider: Type.Optional(
                 Type.String({
                     description:
-                        "One provider id (openai-codex, opencode-go, commandcode, commandcode-b); absent means all.",
+                        "One provider id (openai-codex, opencode-go, commandcode, commandcode-b, ...); absent means all.",
                 }),
             ),
         }),

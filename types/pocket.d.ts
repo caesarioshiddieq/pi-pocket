@@ -177,6 +177,14 @@ export interface Host {
         shape: (payload: unknown, model: Model<Api>) => unknown | undefined,
     ): () => void;
     /**
+     * Adds a provider's quota that the module reads itself, such as a local client with its own sign-in, to the usage
+     * sheet and the `usage_quota` tool. The id may not be a built-in provider's; the newest registration of an id wins.
+     * The return value removes it; pass it to `web.onDispose`.
+     * @since 0.27.0
+     * @experimental
+     */
+    registerQuotaSource(source: QuotaSource): () => void;
+    /**
      * The id of the person that Pi works for in a session now: the person whose message started its current work.
      * @since 0.3.0
      */
@@ -807,6 +815,65 @@ export interface BrowserPageHandle {
      * @experimental
      */
     waitFor(options: { text?: string; selector?: string; timeoutMs?: number }): Promise<boolean>;
+}
+
+/**
+ * A provider's quota that a module reads itself, for `host.registerQuotaSource`.
+ * @since 0.27.0
+ * @experimental
+ */
+export interface QuotaSource {
+    /** Lower-case letters, digits, and dashes, up to 40; not a built-in provider's id. */
+    id: string;
+    /** The provider's name on the sheet and in the tool's text. */
+    displayName: string;
+    /** The report now. Pi aborts `signal` and shows an error after 15 seconds; a failure shows as this provider's alone. */
+    read: (signal: AbortSignal) => Promise<QuotaReport>;
+}
+
+/**
+ * What a quota source reports. Pi keeps only these fields, sets the id and name to the source's, and shows an error for a
+ * report with no bucket and no metric.
+ * @since 0.27.0
+ * @experimental
+ */
+export interface QuotaReport {
+    accountLabel?: string;
+    capturedAt?: number;
+    buckets: QuotaBucket[];
+    metrics: QuotaMetric[];
+    notes?: string[];
+    providerId?: string;
+    providerName?: string;
+}
+
+/**
+ * One window or allowance of a quota, drawn as a bar.
+ * @since 0.27.0
+ * @experimental
+ */
+export interface QuotaBucket {
+    id: string;
+    label: string;
+    used?: number;
+    remaining?: number;
+    limit?: number;
+    unit: "percent" | "usd" | "count";
+    windowMinutes?: number;
+    /** Epoch seconds; 0 means the window is not running. */
+    resetsAt?: number;
+}
+
+/**
+ * One figure of a quota, shown as a line.
+ * @since 0.27.0
+ * @experimental
+ */
+export interface QuotaMetric {
+    id: string;
+    label: string;
+    value: string | number;
+    unit?: "percent" | "usd" | "count";
 }
 
 /**

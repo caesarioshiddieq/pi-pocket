@@ -80,12 +80,31 @@ export default () =>
 	});
 `;
 
+/** A drop-in that adds a provider it reads itself, under `id`. */
+const quotaDropIn = (id: string) => `/** A drop-in that reads a provider's quota itself. */
+export default (host, web) => {
+	web.onDispose(
+		host.registerQuotaSource({
+			id: "${id}",
+			displayName: "Example plan",
+			read: async () => ({
+				buckets: [{ id: "week", label: "7d window", used: 30, remaining: 70, limit: 100, unit: "percent" }],
+				metrics: [],
+				notes: ["Plan: demo"],
+			}),
+		}),
+	);
+};
+`;
+
 let app: App;
 
 before(async () => {
     mkdirSync(dropIns, { recursive: true });
     // A drop-in of the owner's that offers the name of a built-in tool: off until the owner turns it on.
     writeFileSync(join(dropIns, "my-usage.ts"), dropIn("usage_quota"));
+    writeFileSync(join(dropIns, "my-quota.ts"), quotaDropIn("example-plan"));
+    writeFileSync(join(dropIns, "my-codex-quota.ts"), quotaDropIn("openai-codex"));
     app = await openApp(model, dataDir);
     // The sign-in comes after the app opened: a sign-in in place at its start would have it refresh the providers
     // once, on its own, before a fixture is here to answer. Every endpoint below answers from `fetch` instead, and any
@@ -178,5 +197,36 @@ test("a drop-in cannot take the usage tool's name", async () => {
         "the drop-in installed nothing",
     );
     // The built-in tool it tried to take still answers for the model.
+    assert.match(await turn("check the quota"), /1\/4 from their own APIs/);
+});
+
+test("a drop-in's quota source shows in the tool's answer while the drop-in is on", async () => {
+    await app.setExtensionEnabled(owner(app), "my-quota.ts", true);
+
+    const on = await turn("check the quota");
+
+    assert.match(on, /2\/5 from their own APIs/);
+    assert.match(on, /Example plan/);
+    assert.match(on, /7d window: 30% used/);
+    assert.match(on, /Plan: demo/);
+    assert.deepEqual(
+        [...new Set(asked)],
+        [codexUrl],
+        "the source read itself: the app fetched nothing for it",
+    );
+
+    await app.setExtensionEnabled(owner(app), "my-quota.ts", false);
+
+    const off = await turn("check the quota");
+
+    assert.match(off, /1\/4 from their own APIs/, "turning the drop-in off removes its source");
+    assert.doesNotMatch(off, /Example plan/);
+});
+
+test("a drop-in cannot take a built-in provider's quota id", async () => {
+    await assert.rejects(
+        app.setExtensionEnabled(owner(app), "my-codex-quota.ts", true),
+        /openai-codex is a built-in provider's/,
+    );
     assert.match(await turn("check the quota"), /1\/4 from their own APIs/);
 });
