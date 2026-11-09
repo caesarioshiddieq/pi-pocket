@@ -28,6 +28,7 @@ const HEADED = new Map([
     ["BrowserModule", ""],
     ["SafeText", "text."],
     ["LinkedSessions", "linkedSessions."],
+    ["Sessions", "sessions."],
 ]);
 
 /** Which types each page describes. */
@@ -42,6 +43,7 @@ export const PAGES = {
         "QuotaMetric",
         "LinkedSessions",
         "LinkedSession",
+        "Sessions",
         "AskRequest",
         "AskField",
         "AskAnswer",
@@ -60,10 +62,14 @@ export const PAGES = {
         "WebRequest",
         "WebSession",
         "ConversationWebRequest",
+        "ConversationWebRequest.conversationUsage",
+        "UsageTotals",
+        "ConversationUsage",
         "HumanLinkedSessions",
         "HumanLinkedSession",
         "WebMethod",
         "WebAccess",
+        "PresentEntry",
         "PublicPageHandler",
         "PublicPageAnswer",
         "PublicPageRequest",
@@ -101,6 +107,9 @@ export const PAGES = {
         "PipApi",
         "PipAskResult",
         "ComposerKeySpec",
+        "FenceSpec",
+        "MathInlineSpec",
+        "FenceProps",
         "ComposerBox",
         "SlotName",
         "Arrangement",
@@ -160,6 +169,14 @@ function expected(source) {
         }
 
         owners.set(name, headings);
+
+        if (ts.isInterfaceDeclaration(statement)) {
+            for (const member of statement.members) {
+                const key = `${name}.${member.name?.getText(file)}`;
+
+                owners.set(key, new Map([[key, meta(member)]]));
+            }
+        }
     }
 
     return owners;

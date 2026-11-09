@@ -2,7 +2,7 @@
  * The usage_quota tool: each signed-in provider's own usage endpoint, live, as its quota and windows say. It reads the
  * app's usage part through the host (`usage.ts`), which a restart brings.
  */
-import { Type } from "@earendil-works/pi-ai";
+import { obj, opt, str } from "@earendil-works/pi-schema";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import type { PocketHost } from "../host.ts";
 
@@ -11,9 +11,9 @@ export default function createUsage(host: PocketHost) {
         name: "usage_quota",
         description:
             "Live usage and quota for the signed-in providers (OpenAI Codex, OpenCode Go, Command Code accounts, module sources): each provider's own usage endpoint, refreshed on demand. Read-only.",
-        parameters: Type.Object({
-            provider: Type.Optional(
-                Type.String({
+        parameters: obj({
+            provider: opt(
+                str({
                     description:
                         "One provider id (openai-codex, opencode-go, commandcode, commandcode-b, ...); absent means all.",
                 }),

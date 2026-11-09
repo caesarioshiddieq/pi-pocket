@@ -11,6 +11,7 @@ import {
     scriptedModel,
     fakeTab,
     until,
+    offerSubagents,
 } from "./helpers.ts";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
@@ -44,6 +45,7 @@ let app: App;
 
 before(async () => {
     app = await openApp(model);
+    offerSubagents(app);
 });
 
 after(async () => {
@@ -175,6 +177,7 @@ test("who asked is fixed when the call asks, a subagent works for whoever its pa
         );
         await app.close();
         app = await openApp(model);
+        offerSubagents(app);
         assert.equal(app.attribution.requesterOf(helper), alex.id, "and after a restart");
         const delegated = ask(helper, "rm -rf docs");
 
@@ -232,6 +235,7 @@ test("whose work Pi does survives a crash before it was written down, and when n
         }, context);
         await app.close();
         app = await openApp(model);
+        offerSubagents(app);
     };
 
     try {
