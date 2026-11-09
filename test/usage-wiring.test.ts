@@ -170,7 +170,7 @@ test("the usage_quota tool runs, and answers from the usage part", async () => {
 });
 
 test("the tool comes and goes with the usage module", async () => {
-    await app.setExtensionEnabled(owner(app), "usage.ts", false);
+    await app.setExtensionEnabled(owner(app), "usage-quota.ts", false);
 
     const off = await turn("check the quota");
 
@@ -178,7 +178,7 @@ test("the tool comes and goes with the usage module", async () => {
     assert.match(off, /Tool usage_quota is not available/, "no usage tool while the module is off");
     assert.doesNotMatch(off, /from their own APIs/, "and nothing of the usage part's own text");
 
-    await app.setExtensionEnabled(owner(app), "usage.ts", true);
+    await app.setExtensionEnabled(owner(app), "usage-quota.ts", true);
 
     const on = await turn("check the quota");
 
